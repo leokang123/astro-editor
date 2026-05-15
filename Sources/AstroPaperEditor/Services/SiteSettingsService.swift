@@ -7,45 +7,64 @@ struct SiteSettingsService {
             .appendingPathComponent("config.ts", isDirectory: false)
     }
 
+    func userSettingsURL(for projectRoot: URL) -> URL {
+        projectRoot
+            .appendingPathComponent("src", isDirectory: true)
+            .appendingPathComponent("user-settings.ts", isDirectory: false)
+    }
+
     func readHomeSettings(projectRoot: URL) throws -> HomeSettings {
-        let config = try String(contentsOf: configURL(for: projectRoot), encoding: .utf8)
+        let userSettings = try String(contentsOf: userSettingsURL(for: projectRoot), encoding: .utf8)
 
         return HomeSettings(
-            siteTitle: config.tsStringValue(path: ["SITE", "title"]) ?? "",
-            siteDescription: config.tsStringValue(path: ["SITE", "desc"]) ?? "",
-            author: config.tsStringValue(path: ["SITE", "author"]) ?? "",
-            website: config.tsStringValue(path: ["SITE", "website"]) ?? "",
-            profile: config.tsStringValue(path: ["SITE", "profile"]) ?? "",
-            homeTitle: config.tsStringValue(path: ["SITE", "home", "title"]) ?? "",
-            homeDescription: config.tsStringArray(path: ["SITE", "home", "description"]),
-            readMoreText: config.tsStringValue(path: ["SITE", "home", "readMore", "text"]) ?? "",
-            readMoreLinkText: config.tsStringValue(path: ["SITE", "home", "readMore", "linkText"]) ?? "",
-            readMoreHref: config.tsStringValue(path: ["SITE", "home", "readMore", "href"]) ?? "",
-            socialLabel: config.tsStringValue(path: ["SITE", "home", "socialLabel"]) ?? "",
-            allPostsText: config.tsStringValue(path: ["SITE", "home", "allPostsText"]) ?? "",
-            postPerIndex: config.tsScalarValue(path: ["SITE", "postPerIndex"]) ?? ""
+            siteTitle: userSettings.tsStringValue(path: ["USER_SITE", "title"]) ?? "",
+            siteDescription: userSettings.tsStringValue(path: ["USER_SITE", "desc"]) ?? "",
+            author: userSettings.tsStringValue(path: ["USER_SITE", "author"]) ?? "",
+            website: userSettings.tsStringValue(path: ["USER_SITE", "website"]) ?? "",
+            profile: userSettings.tsStringValue(path: ["USER_SITE", "profile"]) ?? "",
+            homeTitle: userSettings.tsStringValue(path: ["USER_SITE", "home", "title"]) ?? "",
+            homeDescription: userSettings.tsStringArray(path: ["USER_SITE", "home", "description"]),
+            readMoreText: userSettings.tsStringValue(path: ["USER_SITE", "home", "readMore", "text"]) ?? "",
+            readMoreLinkText: userSettings.tsStringValue(path: ["USER_SITE", "home", "readMore", "linkText"]) ?? "",
+            readMoreHref: userSettings.tsStringValue(path: ["USER_SITE", "home", "readMore", "href"]) ?? "",
+            socialLabel: userSettings.tsStringValue(path: ["USER_SITE", "home", "socialLabel"]) ?? "",
+            allPostsText: userSettings.tsStringValue(path: ["USER_SITE", "home", "allPostsText"]) ?? "",
+            postPerIndex: userSettings.tsScalarValue(path: ["USER_SITE", "postPerIndex"]) ?? "",
+            socials: userSettings.socialLinks()
         )
     }
 
     func writeHomeSettings(_ settings: HomeSettings, projectRoot: URL) throws {
-        let configURL = configURL(for: projectRoot)
-        var config = try String(contentsOf: configURL, encoding: .utf8)
+        let settingsURL = userSettingsURL(for: projectRoot)
+        var userSettings = try String(contentsOf: settingsURL, encoding: .utf8)
 
-        config.replaceTSString(path: ["SITE", "title"], with: settings.siteTitle)
-        config.replaceTSString(path: ["SITE", "desc"], with: settings.siteDescription)
-        config.replaceTSString(path: ["SITE", "author"], with: settings.author)
-        config.replaceTSString(path: ["SITE", "website"], with: settings.website)
-        config.replaceTSString(path: ["SITE", "profile"], with: settings.profile)
-        config.replaceTSString(path: ["SITE", "home", "title"], with: settings.homeTitle)
-        config.replaceTSStringArray(path: ["SITE", "home", "description"], with: settings.homeDescription)
-        config.replaceTSString(path: ["SITE", "home", "readMore", "text"], with: settings.readMoreText)
-        config.replaceTSString(path: ["SITE", "home", "readMore", "linkText"], with: settings.readMoreLinkText)
-        config.replaceTSString(path: ["SITE", "home", "readMore", "href"], with: settings.readMoreHref)
-        config.replaceTSString(path: ["SITE", "home", "socialLabel"], with: settings.socialLabel)
-        config.replaceTSString(path: ["SITE", "home", "allPostsText"], with: settings.allPostsText)
-        config.replaceTSScalar(path: ["SITE", "postPerIndex"], with: settings.postPerIndex)
+        userSettings.replaceTSString(path: ["USER_SITE", "title"], with: settings.siteTitle)
+        userSettings.replaceTSString(path: ["USER_SITE", "desc"], with: settings.siteDescription)
+        userSettings.replaceTSString(path: ["USER_SITE", "author"], with: settings.author)
+        userSettings.replaceTSString(path: ["USER_SITE", "website"], with: settings.website)
+        userSettings.replaceTSString(path: ["USER_SITE", "profile"], with: settings.profile)
+        userSettings.replaceTSString(path: ["USER_SITE", "home", "title"], with: settings.homeTitle)
+        userSettings.replaceTSStringArray(path: ["USER_SITE", "home", "description"], with: settings.homeDescription)
+        userSettings.replaceTSString(path: ["USER_SITE", "home", "readMore", "text"], with: settings.readMoreText)
+        userSettings.replaceTSString(path: ["USER_SITE", "home", "readMore", "linkText"], with: settings.readMoreLinkText)
+        userSettings.replaceTSString(path: ["USER_SITE", "home", "readMore", "href"], with: settings.readMoreHref)
+        userSettings.replaceTSString(path: ["USER_SITE", "home", "socialLabel"], with: settings.socialLabel)
+        userSettings.replaceTSString(path: ["USER_SITE", "home", "allPostsText"], with: settings.allPostsText)
+        userSettings.replaceTSScalar(path: ["USER_SITE", "postPerIndex"], with: settings.postPerIndex)
 
-        try config.write(to: configURL, atomically: true, encoding: .utf8)
+        try userSettings.write(to: settingsURL, atomically: true, encoding: .utf8)
+    }
+
+    func writeSocialSettings(_ settings: HomeSettings, projectRoot: URL) throws {
+        let settingsURL = userSettingsURL(for: projectRoot)
+        var userSettings = try String(contentsOf: settingsURL, encoding: .utf8)
+
+        for social in settings.socials {
+            userSettings.replaceSocialEnabled(name: social.name, isEnabled: social.isEnabled)
+            userSettings.replaceSocialHref(name: social.name, href: social.href)
+        }
+
+        try userSettings.write(to: settingsURL, atomically: true, encoding: .utf8)
     }
 }
 
@@ -130,6 +149,72 @@ private extension String {
         replaceSubrange(objectRange, with: updatedObject)
     }
 
+    func socialLinks() -> [SocialLinkSetting] {
+        guard let socialRange = range(of: "export const USER_SOCIALS"),
+              let bracketStart = self[socialRange.upperBound...].firstIndex(of: "["),
+              let bracketRange = balancedRange(opening: bracketStart, open: "[", close: "]") else {
+            return []
+        }
+        let section = String(self[bracketRange])
+        return section.topLevelObjectTexts().compactMap { object in
+            guard let name = object.tsObjectStringValue(key: "name"),
+                  let href = object.tsObjectStringValue(key: "href") else {
+                return nil
+            }
+            let enabled = object.tsObjectBooleanValue(key: "enabled") ?? true
+            return SocialLinkSetting(name: name, isEnabled: enabled, href: href)
+        }
+    }
+
+    mutating func replaceSocialEnabled(name: String, isEnabled: Bool) {
+        guard let socialRange = range(of: "export const USER_SOCIALS"),
+              let bracketStart = self[socialRange.upperBound...].firstIndex(of: "["),
+              let bracketRange = balancedRange(opening: bracketStart, open: "[", close: "]") else {
+            return
+        }
+        let section = String(self[bracketRange])
+        let escapedName = NSRegularExpression.escapedPattern(for: name.escapedTSString)
+        let objectPattern = #"(?s)\{\s*name:\s*"\#(escapedName)"\s*,.*?\}"#
+        guard let objectMatch = section.firstMatch(pattern: objectPattern),
+              let objectRange = Range(objectMatch.range(at: 0), in: section) else {
+            return
+        }
+
+        var object = String(section[objectRange])
+        let enabledValue = isEnabled ? "true" : "false"
+        if let enabledMatch = object.firstMatch(pattern: #"\benabled:\s*(true|false)"#),
+           let enabledRange = Range(enabledMatch.range(at: 0), in: object) {
+            object.replaceSubrange(enabledRange, with: "enabled: \(enabledValue)")
+        } else if let nameMatch = object.firstMatch(pattern: #"(name:\s*"((?:\\.|[^"\\])*)"\s*,)"#),
+                  let nameLineRange = Range(nameMatch.range(at: 1), in: object) {
+            object.replaceSubrange(nameLineRange, with: "\(object[nameLineRange])\n    enabled: \(enabledValue),")
+        }
+
+        var updatedSection = section
+        updatedSection.replaceSubrange(objectRange, with: object)
+        replaceSubrange(bracketRange, with: updatedSection)
+    }
+
+    mutating func replaceSocialHref(name: String, href: String) {
+        guard let socialRange = range(of: "export const USER_SOCIALS"),
+              let bracketStart = self[socialRange.upperBound...].firstIndex(of: "["),
+              let bracketRange = balancedRange(opening: bracketStart, open: "[", close: "]") else {
+            return
+        }
+        let section = String(self[bracketRange])
+        let escapedName = NSRegularExpression.escapedPattern(for: name.escapedTSString)
+        let pattern = #"(?s)(\{\s*name:\s*"\#(escapedName)"\s*,\s*(?:enabled:\s*(?:true|false)\s*,\s*)?href:\s*)"((?:\\.|[^"\\])*)""#
+        guard let match = section.firstMatch(pattern: pattern), match.numberOfRanges >= 3,
+              let fullRangeInSection = Range(match.range(at: 0), in: section),
+              let prefixRange = Range(match.range(at: 1), in: section) else {
+            return
+        }
+        let replacement = "\(section[prefixRange])\"\(href.escapedTSString)\""
+        var updatedSection = section
+        updatedSection.replaceSubrange(fullRangeInSection, with: replacement)
+        replaceSubrange(bracketRange, with: updatedSection)
+    }
+
     func objectText(path: [String]) -> String? {
         guard let range = objectRange(path: path) else { return nil }
         return String(self[range])
@@ -204,6 +289,38 @@ private extension String {
     func substring(range: NSRange) -> String? {
         guard let range = Range(range, in: self) else { return nil }
         return String(self[range])
+    }
+
+    func topLevelObjectTexts() -> [String] {
+        var objects: [String] = []
+        var index = startIndex
+        while index < endIndex {
+            guard self[index] == "{" else {
+                index = self.index(after: index)
+                continue
+            }
+            guard let range = balancedRange(opening: index, open: "{", close: "}") else {
+                break
+            }
+            objects.append(String(self[range]))
+            index = range.upperBound
+        }
+        return objects
+    }
+
+    func tsObjectStringValue(key: String) -> String? {
+        let pattern = #"\b\#(NSRegularExpression.escapedPattern(for: key))\s*:\s*"((?:\\.|[^"\\])*)""#
+        guard let match = firstMatch(pattern: pattern), match.numberOfRanges >= 2 else { return nil }
+        return substring(range: match.range(at: 1))?.unescapedTSString
+    }
+
+    func tsObjectBooleanValue(key: String) -> Bool? {
+        let pattern = #"\b\#(NSRegularExpression.escapedPattern(for: key))\s*:\s*(true|false)"#
+        guard let match = firstMatch(pattern: pattern), match.numberOfRanges >= 2,
+              let value = substring(range: match.range(at: 1)) else {
+            return nil
+        }
+        return value == "true"
     }
 
     var escapedTSString: String {

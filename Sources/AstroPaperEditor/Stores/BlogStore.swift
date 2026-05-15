@@ -33,6 +33,10 @@ final class BlogStore: ObservableObject {
         siteSettingsService.configURL(for: projectRoot)
     }
 
+    var userSettingsURL: URL {
+        siteSettingsService.userSettingsURL(for: projectRoot)
+    }
+
     var canSave: Bool {
         currentDocument != nil && isDirty
     }
@@ -302,7 +306,12 @@ final class BlogStore: ObservableObject {
 
     func writeHomeSettings(_ settings: HomeSettings) throws {
         try siteSettingsService.writeHomeSettings(settings, projectRoot: projectRoot)
-        statusText = "Saved src/config.ts"
+        statusText = "Saved src/user-settings.ts"
+    }
+
+    func writeSocialSettings(_ settings: HomeSettings) throws {
+        try siteSettingsService.writeSocialSettings(settings, projectRoot: projectRoot)
+        statusText = "Saved USER_SOCIALS"
     }
 
     func confirmTermination() -> NSApplication.TerminateReply {

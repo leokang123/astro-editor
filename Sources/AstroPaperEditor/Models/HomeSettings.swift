@@ -14,4 +14,12 @@ struct HomeSettings: Equatable {
     var socialLabel: String
     var allPostsText: String
     var postPerIndex: String
+    var socials: [SocialLinkSetting]
+}
+
+struct SocialLinkSetting: Identifiable, Equatable {
+    var id: String { name }
+    var name: String
+    var isEnabled: Bool
+    var href: String
 }
