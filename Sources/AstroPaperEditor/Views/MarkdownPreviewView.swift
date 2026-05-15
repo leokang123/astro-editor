@@ -19,11 +19,22 @@ struct MarkdownPreviewView: NSViewRepresentable {
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
+        let renderKey = [
+            document.fileURL.path,
+            document.frontmatter.title,
+            document.frontmatter.description,
+            String(document.body.hashValue)
+        ].joined(separator: "\u{1F}")
+        guard context.coordinator.renderKey != renderKey else { return }
+        context.coordinator.renderKey = renderKey
+
         let html = MarkdownPreviewHTMLRenderer(document: document, projectRoot: projectRoot).html()
         webView.loadHTMLString(html, baseURL: projectRoot)
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate {
+        var renderKey = ""
+
         func webView(
             _ webView: WKWebView,
             decidePolicyFor navigationAction: WKNavigationAction,

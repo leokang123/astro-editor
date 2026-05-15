@@ -12,14 +12,19 @@ final class BlogStore: ObservableObject {
     @Published var statusText = "Ready"
     @Published var buildLog = ""
     @Published var isBuilding = false
+    @Published var gitLog = ""
+    @Published var gitStatus = GitRepositoryStatus.unknown
+    @Published var isGitOperationRunning = false
     @Published var message: AppMessage?
     @Published var editorMode: EditorMode = .edit
 
     private let fileService = BlogFileService()
     private let imageService = ImageService()
     private let buildService = BuildService()
+    private let gitService = GitService()
     private let sitePageService = SitePageService()
     private let siteSettingsService = SiteSettingsService()
+    private var editorBodyProvider: (() -> String?)?
 
     var blogRoot: URL {
         fileService.blogRoot(for: projectRoot)
@@ -43,6 +48,10 @@ final class BlogStore: ObservableObject {
 
     var canTogglePreview: Bool {
         currentDocument != nil
+    }
+
+    var canCommitAndPush: Bool {
+        !isGitOperationRunning
     }
 
     var selectedNode: BlogNode? {
@@ -80,6 +89,7 @@ final class BlogStore: ObservableObject {
         if confirmDiscardOrSaveChanges() {
             projectRoot = url
             currentDocument = nil
+            editorBodyProvider = nil
             selectionID = nil
             rescan()
         }
@@ -102,12 +112,14 @@ final class BlogStore: ObservableObject {
 
         guard let id, let node = node(withID: id), node.kind == .document else {
             currentDocument = nil
+            editorBodyProvider = nil
             isDirty = false
             return
         }
 
         do {
             currentDocument = try fileService.readDocument(at: node.url, blogRoot: blogRoot)
+            editorBodyProvider = nil
             isDirty = false
             statusText = "Opened \(node.relativePath)"
         } catch {
@@ -115,10 +127,15 @@ final class BlogStore: ObservableObject {
         }
     }
 
-    func updateBody(_ body: String) {
+    func markBodyChanged() {
         guard currentDocument != nil else { return }
-        currentDocument?.body = body
-        isDirty = true
+        if !isDirty {
+            isDirty = true
+        }
+    }
+
+    func setEditorBodyProvider(_ provider: (() -> String?)?) {
+        editorBodyProvider = provider
     }
 
     func updateFrontmatter(_ edit: (inout Frontmatter) -> Void) {
@@ -128,6 +145,7 @@ final class BlogStore: ObservableObject {
     }
 
     func saveCurrentDocument() {
+        flushEditorBodyToCurrentDocument()
         guard var document = currentDocument else { return }
         document.frontmatter.modDatetime = DateFormatting.astropaperTimestamp.string(from: Date())
         do {
@@ -142,6 +160,9 @@ final class BlogStore: ObservableObject {
 
     func toggleEditorMode() {
         guard canTogglePreview else { return }
+        if editorMode == .edit {
+            flushEditorBodyToCurrentDocument()
+        }
         editorMode = editorMode == .edit ? .preview : .edit
     }
 
@@ -248,6 +269,7 @@ final class BlogStore: ObservableObject {
             try fileService.trash(node: node)
             if currentDocument?.fileURL == node.url {
                 currentDocument = nil
+                editorBodyProvider = nil
                 isDirty = false
             }
             selectionID = nil
@@ -287,8 +309,73 @@ final class BlogStore: ObservableObject {
         }
     }
 
-    func openLocalhost() {
-        buildService.openLocalhost()
+    func refreshGitStatus() {
+        Task {
+            gitStatus = await gitService.status(at: projectRoot)
+        }
+    }
+
+    func configureGit(remoteURL: String, branch: String) {
+        guard !isGitOperationRunning else { return }
+        isGitOperationRunning = true
+        gitLog = ""
+        statusText = "Configuring Git..."
+
+        Task {
+            do {
+                gitLog = try gitService.configure(at: projectRoot, remoteURL: remoteURL, branch: branch)
+                gitStatus = await gitService.status(at: projectRoot)
+                isGitOperationRunning = false
+                statusText = "Git remote configured"
+            } catch {
+                isGitOperationRunning = false
+                message = AppMessage(text: error.localizedDescription)
+            }
+        }
+    }
+
+    func commitAndPush(message commitMessage: String) {
+        guard !isGitOperationRunning else { return }
+        guard confirmDiscardOrSaveChanges() else { return }
+
+        isGitOperationRunning = true
+        gitLog = ""
+        statusText = "Committing and pushing..."
+
+        Task {
+            do {
+                let output = try await gitService.commitAndPush(at: projectRoot, message: commitMessage)
+                gitLog = output
+                gitStatus = await gitService.status(at: projectRoot)
+                isGitOperationRunning = false
+                statusText = output == "No changes to commit." ? "No changes to commit" : "Pushed to GitHub"
+            } catch {
+                isGitOperationRunning = false
+                message = AppMessage(text: error.localizedDescription)
+            }
+        }
+    }
+
+    func openWebsite() {
+        do {
+            let rawWebsite = try siteSettingsService.readHomeSettings(projectRoot: projectRoot).website
+            let website = rawWebsite.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !website.isEmpty else {
+                message = AppMessage(text: "Website URL is empty in src/user-settings.ts.")
+                return
+            }
+
+            let normalizedWebsite = website.contains("://") ? website : "https://\(website)"
+            guard let url = URL(string: normalizedWebsite) else {
+                message = AppMessage(text: "Website URL is invalid: \(website)")
+                return
+            }
+
+            buildService.openURL(url)
+            statusText = "Opened \(normalizedWebsite)"
+        } catch {
+            message = AppMessage(text: error.localizedDescription)
+        }
     }
 
     func readAboutPage() throws -> SiteMarkdownPage {
@@ -323,6 +410,7 @@ final class BlogStore: ObservableObject {
             saveCurrentDocument()
             return isDirty ? .terminateCancel : .terminateNow
         case .alertSecondButtonReturn:
+            editorBodyProvider = nil
             return .terminateNow
         default:
             return .terminateCancel
@@ -337,6 +425,7 @@ final class BlogStore: ObservableObject {
             saveCurrentDocument()
             return !isDirty
         case .alertSecondButtonReturn:
+            editorBodyProvider = nil
             isDirty = false
             return true
         default:
@@ -369,6 +458,13 @@ final class BlogStore: ObservableObject {
 
     private func node(withID id: String) -> BlogNode? {
         tree.firstNode { $0.id == id }
+    }
+
+    private func flushEditorBodyToCurrentDocument() {
+        guard let body = editorBodyProvider?() else { return }
+        if currentDocument?.body != body {
+            currentDocument?.body = body
+        }
     }
 
     private func appendCategories(from nodes: [BlogNode], into destinations: inout [CategoryDestination], prefix: String) {

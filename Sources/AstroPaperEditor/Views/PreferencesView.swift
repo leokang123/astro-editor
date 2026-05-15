@@ -25,6 +25,16 @@ struct PreferencesView: View {
                 .tabItem {
                     Label("Social", systemImage: "link")
                 }
+
+            GitPreferencesView(store: store)
+                .tabItem {
+                    Label("Git", systemImage: "arrow.up.circle")
+                }
+
+            DeveloperPreferencesView(store: store)
+                .tabItem {
+                    Label("Developer", systemImage: "hammer")
+                }
         }
         .padding(20)
         .frame(width: 760, height: 560)
@@ -185,9 +195,9 @@ private struct HomeSettingsPreferencesView: View {
                 Spacer()
 
                 Button {
-                    store.openLocalhost()
+                    store.openWebsite()
                 } label: {
-                    Label("Open Localhost", systemImage: "safari")
+                    Label("Open Website", systemImage: "safari")
                 }
             }
             .font(.caption)
@@ -389,9 +399,9 @@ private struct SocialLinksPreferencesView: View {
                 Spacer()
 
                 Button {
-                    store.openLocalhost()
+                    store.openWebsite()
                 } label: {
-                    Label("Open Localhost", systemImage: "safari")
+                    Label("Open Website", systemImage: "safari")
                 }
             }
             .font(.caption)
@@ -557,9 +567,9 @@ private struct AboutPagePreferencesView: View {
                 Spacer()
 
                 Button {
-                    store.openLocalhost()
+                    store.openWebsite()
                 } label: {
-                    Label("Open Localhost", systemImage: "safari")
+                    Label("Open Website", systemImage: "safari")
                 }
             }
             .font(.caption)
@@ -590,6 +600,212 @@ private struct AboutPagePreferencesView: View {
             message = "Saved \(store.aboutPageURL.path)"
         } catch {
             message = error.localizedDescription
+        }
+    }
+}
+
+private struct GitPreferencesView: View {
+    @ObservedObject var store: BlogStore
+    @State private var remoteURL = ""
+    @State private var branch = "main"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Git")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    Text("Configure the repository used by Commit & Push.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button {
+                    store.refreshGitStatus()
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .disabled(store.isGitOperationRunning)
+            }
+
+            GroupBox("Status") {
+                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
+                    GridRow {
+                        Text("Repository")
+                            .foregroundStyle(.secondary)
+                        Text(store.gitStatus.isRepository ? "Initialized" : "Not initialized")
+                    }
+
+                    GridRow {
+                        Text("Branch")
+                            .foregroundStyle(.secondary)
+                        Text(store.gitStatus.branch.isEmpty ? "-" : store.gitStatus.branch)
+                            .textSelection(.enabled)
+                    }
+
+                    GridRow {
+                        Text("Remote")
+                            .foregroundStyle(.secondary)
+                        Text(store.gitStatus.remoteURL.isEmpty ? "Not configured" : store.gitStatus.remoteURL)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .textSelection(.enabled)
+                    }
+
+                    GridRow {
+                        Text("Changes")
+                            .foregroundStyle(.secondary)
+                        Text(store.gitStatus.hasChanges ? "Changed files found" : "Working tree clean")
+                    }
+                }
+                .padding(8)
+            }
+
+            GroupBox("Remote") {
+                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
+                    GridRow {
+                        Text("Remote URL")
+                            .foregroundStyle(.secondary)
+                        TextField("https://github.com/user/repo.git", text: $remoteURL)
+                            .textFieldStyle(.roundedBorder)
+                    }
+
+                    GridRow {
+                        Text("Branch")
+                            .foregroundStyle(.secondary)
+                        TextField("main", text: $branch)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                }
+                .padding(8)
+            }
+
+            HStack {
+                Button {
+                    loadCurrentStatusIntoFields()
+                } label: {
+                    Label("Use Current", systemImage: "arrow.down.doc")
+                }
+
+                Spacer()
+
+                Button {
+                    store.configureGit(remoteURL: remoteURL, branch: branch)
+                } label: {
+                    Label(store.gitStatus.isRepository ? "Update Remote" : "Initialize Git", systemImage: "gearshape")
+                }
+                .disabled(store.isGitOperationRunning || remoteURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || branch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+
+            if !store.gitLog.isEmpty {
+                ScrollView {
+                    Text(store.gitLog)
+                        .font(.system(.caption, design: .monospaced))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                }
+                .frame(maxHeight: .infinity)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+            } else {
+                Spacer()
+            }
+        }
+        .onAppear {
+            store.refreshGitStatus()
+            loadCurrentStatusIntoFields()
+        }
+        .onChange(of: store.gitStatus) { status in
+            if !status.remoteURL.isEmpty {
+                remoteURL = status.remoteURL
+            }
+            if !status.branch.isEmpty {
+                branch = status.branch
+            }
+        }
+    }
+
+    private func loadCurrentStatusIntoFields() {
+        if !store.gitStatus.remoteURL.isEmpty {
+            remoteURL = store.gitStatus.remoteURL
+        }
+        if !store.gitStatus.branch.isEmpty {
+            branch = store.gitStatus.branch
+        }
+    }
+}
+
+private struct DeveloperPreferencesView: View {
+    @ObservedObject var store: BlogStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Developer")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    Text("Manual local build tools for development checks.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button {
+                    store.runBuild()
+                } label: {
+                    Label(store.isBuilding ? "Building" : "Docker Build", systemImage: "hammer")
+                }
+                .disabled(store.isBuilding)
+
+                Button {
+                    store.openWebsite()
+                } label: {
+                    Label("Open Website", systemImage: "safari")
+                }
+            }
+
+            GroupBox("Docker Compose") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Runs in the selected blog project root:")
+                        .foregroundStyle(.secondary)
+                    Text("docker compose up --build -d")
+                        .font(.system(.body, design: .monospaced))
+                        .textSelection(.enabled)
+                    Text(store.projectRoot.path)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(8)
+            }
+
+            if store.buildLog.isEmpty {
+                VStack(spacing: 10) {
+                    Image(systemName: "hammer")
+                        .font(.system(size: 34))
+                        .foregroundStyle(.secondary)
+                    Text("No Docker build log yet")
+                        .font(.headline)
+                    Text("Run Docker Build when you want to test the local container.")
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    Text(store.buildLog)
+                        .font(.system(.caption, design: .monospaced))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                }
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+            }
         }
     }
 }

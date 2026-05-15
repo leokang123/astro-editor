@@ -66,16 +66,16 @@ struct ContentView: View {
                 .disabled(!store.canSave)
 
                 Button {
-                    store.runBuild()
+                    activeSheet = .commitPush
                 } label: {
-                    Label(store.isBuilding ? "Building" : "Build", systemImage: "hammer")
+                    Label(store.isGitOperationRunning ? "Pushing" : "Commit & Push", systemImage: "paperplane")
                 }
-                .disabled(store.isBuilding)
+                .disabled(!store.canCommitAndPush)
 
                 Button {
-                    store.openLocalhost()
+                    store.openWebsite()
                 } label: {
-                    Label("Open Localhost", systemImage: "safari")
+                    Label("Open Website", systemImage: "safari")
                 }
             }
         }
@@ -87,6 +87,8 @@ struct ContentView: View {
                 NewDocumentSheet(store: store, activeSheet: $activeSheet)
             case .move:
                 MoveSheet(store: store, activeSheet: $activeSheet)
+            case .commitPush:
+                CommitPushSheet(store: store, activeSheet: $activeSheet)
             }
         }
         .alert(item: $store.message) { message in
@@ -126,6 +128,7 @@ enum ActiveSheet: String, Identifiable {
     case newCategory
     case newDocument
     case move
+    case commitPush
 
     var id: String { rawValue }
 }

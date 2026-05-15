@@ -25,9 +25,7 @@ final class BuildService {
         return process.terminationStatus
     }
 
-    func openLocalhost() {
-        if let url = URL(string: "http://localhost:8080/") {
-            NSWorkspace.shared.open(url)
-        }
+    func openURL(_ url: URL) {
+        NSWorkspace.shared.open(url)
     }
 }

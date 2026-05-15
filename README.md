@@ -19,8 +19,10 @@ AstroPaperEditor is not a general-purpose note app. It is a focused local file e
 - Supports edit and preview modes with `Command + E`
 - Renders Markdown preview with tables, images, Mermaid, and LaTeX support
 - Saves pasted or dropped images into `src/assets/images`
-- Runs Docker build only when the user presses Build
-- Opens the local blog at `http://localhost:8080/`
+- Commits and pushes the selected blog project to trigger GitHub Pages deployment
+- Configures Git remote and branch from Preferences
+- Keeps Docker build as a manual developer-only action in Preferences
+- Opens the configured `USER_SITE.website` URL in the default browser
 - Provides Preferences for About page, Home settings, and social links
 
 ![AstroPaperEditor preview mode](docs/images/preview.png)
@@ -146,7 +148,8 @@ You can choose another AstroPaper project folder from inside the app.
 - macOS
 - Swift toolchain / Xcode command line tools
 - AstroPaper blog project
-- Docker, if you want to use the Build button
+- Git, if you want to use Commit & Push
+- Docker, if you want to use the manual Developer build action
 
 ## Current Status
 

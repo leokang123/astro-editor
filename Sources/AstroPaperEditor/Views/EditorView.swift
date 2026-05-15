@@ -30,10 +30,14 @@ struct EditorView: View {
                     switch store.editorMode {
                     case .edit:
                         MarkdownTextView(
-                            text: Binding(
-                                get: { store.currentDocument?.body ?? "" },
-                                set: { store.updateBody($0) }
-                            ),
+                            documentID: document.fileURL.path,
+                            text: document.body,
+                            onTextChange: {
+                                store.markBodyChanged()
+                            },
+                            onRegisterBodyProvider: { provider in
+                                store.setEditorBodyProvider(provider)
+                            },
                             onInsertImages: { images in
                                 store.insertImages(images)
                             },

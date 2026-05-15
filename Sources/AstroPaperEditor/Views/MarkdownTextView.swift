@@ -2,12 +2,21 @@ import AppKit
 import SwiftUI
 
 struct MarkdownTextView: NSViewRepresentable {
-    @Binding var text: String
+    let documentID: String
+    let text: String
+    var onTextChange: () -> Void
+    var onRegisterBodyProvider: (((() -> String?)?) -> Void)
     var onInsertImages: ([PastedImage]) -> String
     var onTogglePreview: (() -> Void)?
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text, onInsertImages: onInsertImages, onTogglePreview: onTogglePreview)
+        Coordinator(
+            documentID: documentID,
+            onTextChange: onTextChange,
+            onRegisterBodyProvider: onRegisterBodyProvider,
+            onInsertImages: onInsertImages,
+            onTogglePreview: onTogglePreview
+        )
     }
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -30,41 +39,65 @@ struct MarkdownTextView: NSViewRepresentable {
         textView.allowsUndo = true
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticTextReplacementEnabled = false
+        textView.isAutomaticSpellingCorrectionEnabled = false
+        textView.isContinuousSpellCheckingEnabled = false
+        textView.isGrammarCheckingEnabled = false
+        textView.string = text
         textView.delegate = context.coordinator
         textView.pasteCoordinator = context.coordinator
         textView.registerForDraggedTypes([.fileURL, .tiff, .png])
 
         scrollView.documentView = textView
         context.coordinator.textView = textView
+        context.coordinator.documentID = documentID
+        context.coordinator.registerBodyProvider()
         return scrollView
     }
 
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         guard let textView = nsView.documentView as? NSTextView else { return }
-        if textView.string != text {
+        if context.coordinator.documentID != documentID {
             let selectedRange = textView.selectedRange()
             textView.string = text
             textView.setSelectedRange(NSRange(location: min(selectedRange.location, text.count), length: 0))
+            context.coordinator.documentID = documentID
+            context.coordinator.registerBodyProvider()
         }
+        context.coordinator.onTextChange = onTextChange
+        context.coordinator.onRegisterBodyProvider = onRegisterBodyProvider
         context.coordinator.onInsertImages = onInsertImages
         context.coordinator.onTogglePreview = onTogglePreview
     }
 
+    static func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {
+        coordinator.onRegisterBodyProvider(nil)
+    }
+
     final class Coordinator: NSObject, NSTextViewDelegate {
-        @Binding var text: String
+        var documentID: String
+        var onTextChange: () -> Void
+        var onRegisterBodyProvider: (((() -> String?)?) -> Void)
         var onInsertImages: ([PastedImage]) -> String
         var onTogglePreview: (() -> Void)?
         weak var textView: NSTextView?
 
-        init(text: Binding<String>, onInsertImages: @escaping ([PastedImage]) -> String, onTogglePreview: (() -> Void)?) {
-            _text = text
+        init(
+            documentID: String,
+            onTextChange: @escaping () -> Void,
+            onRegisterBodyProvider: @escaping (((() -> String?)?) -> Void),
+            onInsertImages: @escaping ([PastedImage]) -> String,
+            onTogglePreview: (() -> Void)?
+        ) {
+            self.documentID = documentID
+            self.onTextChange = onTextChange
+            self.onRegisterBodyProvider = onRegisterBodyProvider
             self.onInsertImages = onInsertImages
             self.onTogglePreview = onTogglePreview
         }
 
         func textDidChange(_ notification: Notification) {
-            guard let textView = notification.object as? NSTextView else { return }
-            text = textView.string
+            onTextChange()
         }
 
         func insertImages(from pasteboard: NSPasteboard) -> Bool {
@@ -73,12 +106,18 @@ struct MarkdownTextView: NSViewRepresentable {
             let markdown = onInsertImages(images)
             guard !markdown.isEmpty, let textView else { return true }
             textView.insertText(markdown, replacementRange: textView.selectedRange())
-            text = textView.string
+            onTextChange()
             return true
         }
 
         func togglePreview() {
             onTogglePreview?()
+        }
+
+        func registerBodyProvider() {
+            onRegisterBodyProvider { [weak textView] in
+                textView?.string
+            }
         }
     }
 }
