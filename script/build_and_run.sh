@@ -60,6 +60,10 @@ cat >"$INFO_PLIST" <<PLIST
 </plist>
 PLIST
 
+xattr -cr "$APP_BUNDLE"
+codesign --force --deep --sign - "$APP_BUNDLE"
+xattr -cr "$APP_BUNDLE"
+
 open_app() {
   /usr/bin/open -n "$APP_BUNDLE"
 }

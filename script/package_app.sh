@@ -59,4 +59,8 @@ cat >"$INFO_PLIST" <<PLIST
 </plist>
 PLIST
 
+xattr -cr "$APP_BUNDLE"
+codesign --force --deep --sign - "$APP_BUNDLE"
+xattr -cr "$APP_BUNDLE"
+
 echo "$APP_BUNDLE"
