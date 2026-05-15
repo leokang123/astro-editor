@@ -7,6 +7,15 @@ struct SidebarView: View {
     var body: some View {
         VStack(spacing: 0) {
             List(selection: selectionBinding) {
+                Label("src/data/blog", systemImage: "folder")
+                    .tag(BlogNodeID.root)
+                    .contextMenu {
+                        Button("New Category") { activeSheet = .newCategory }
+                        Button("New Document") { activeSheet = .newDocument }
+                    }
+
+                Divider()
+
                 OutlineGroup(store.tree, children: \.outlineChildren) { node in
                     Label(node.name, systemImage: node.systemImage)
                         .tag(node.id)
@@ -47,7 +56,7 @@ struct SidebarView: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
-                .disabled(store.selectedNode == nil)
+                .disabled(store.selectedNode == nil || store.selectionID == BlogNodeID.root)
             }
             .labelStyle(.iconOnly)
             .padding(8)
