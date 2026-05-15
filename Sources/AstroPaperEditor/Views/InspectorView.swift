@@ -16,6 +16,7 @@ struct InspectorView: View {
             if let document = store.currentDocument {
                 Form {
                     TextField("Title", text: frontmatterBinding(\.title))
+                    TextField("Order", text: orderBinding)
                     TextField("Description", text: frontmatterBinding(\.description), axis: .vertical)
                         .lineLimit(2...4)
                     TextField("Published", text: frontmatterBinding(\.pubDatetime))
@@ -74,6 +75,16 @@ struct InspectorView: View {
             get: { store.currentDocument?.frontmatter[keyPath: keyPath] ?? "" },
             set: { value in
                 store.updateFrontmatter { $0[keyPath: keyPath] = value }
+            }
+        )
+    }
+
+    private var orderBinding: Binding<String> {
+        Binding(
+            get: { store.currentDocument?.frontmatter.order ?? "" },
+            set: { value in
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                store.updateFrontmatter { $0.order = trimmed.isEmpty ? nil : trimmed }
             }
         )
     }

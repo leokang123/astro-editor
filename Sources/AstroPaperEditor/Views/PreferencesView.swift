@@ -634,6 +634,24 @@ private struct GitPreferencesView: View {
             GroupBox("Status") {
                 Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
                     GridRow {
+                        Text("Project")
+                            .foregroundStyle(.secondary)
+                        Text(store.gitStatus.projectRootPath.isEmpty ? store.projectRoot.path : store.gitStatus.projectRootPath)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .textSelection(.enabled)
+                    }
+
+                    GridRow {
+                        Text("Git")
+                            .foregroundStyle(.secondary)
+                        Text(store.gitStatus.gitExecutablePath.isEmpty ? "-" : store.gitStatus.gitExecutablePath)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .textSelection(.enabled)
+                    }
+
+                    GridRow {
                         Text("Repository")
                             .foregroundStyle(.secondary)
                         Text(store.gitStatus.isRepository ? "Initialized" : "Not initialized")
@@ -665,7 +683,7 @@ private struct GitPreferencesView: View {
                         Text("Details")
                             .foregroundStyle(.secondary)
                         Text(store.gitStatus.summary)
-                            .lineLimit(3)
+                            .lineLimit(6)
                             .textSelection(.enabled)
                     }
                 }

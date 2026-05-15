@@ -2,6 +2,8 @@ import Foundation
 
 final class GitService {
     func status(at projectRoot: URL) async -> GitRepositoryStatus {
+        let gitPath = (try? gitExecutableURL().path) ?? "Not found"
+
         do {
             _ = try runGit(["rev-parse", "--is-inside-work-tree"], at: projectRoot)
         } catch {
@@ -10,20 +12,25 @@ final class GitService {
                 branch: "",
                 remoteURL: "",
                 hasChanges: false,
-                summary: error.localizedDescription
+                summary: error.localizedDescription,
+                projectRootPath: projectRoot.path,
+                gitExecutablePath: gitPath
             )
         }
 
         let branch = currentBranch(at: projectRoot)
         let remote = (try? runGit(["remote", "get-url", "origin"], at: projectRoot).trimmedOutput) ?? ""
         let changes = (try? runGit(["status", "--short"], at: projectRoot).trimmedOutput) ?? ""
+        let summary = changes.isEmpty ? "Working tree clean" : summarizeChanges(changes)
 
         return GitRepositoryStatus(
             isRepository: true,
             branch: branch,
             remoteURL: remote,
             hasChanges: !changes.isEmpty,
-            summary: changes.isEmpty ? "Working tree clean" : changes
+            summary: summary,
+            projectRootPath: projectRoot.path,
+            gitExecutablePath: gitPath
         )
     }
 
@@ -77,17 +84,17 @@ final class GitService {
             return "No changes to commit."
         }
 
-        var log = ""
-        log += try runGit(["add", "."], at: projectRoot).output
+        _ = try runGit(["add", "."], at: projectRoot)
 
         let staged = try runGit(["diff", "--cached", "--name-only"], at: projectRoot).trimmedOutput
         guard !staged.isEmpty else {
             return "No staged changes to commit."
         }
+        let stagedCount = staged.split(separator: "\n", omittingEmptySubsequences: true).count
 
-        log += try runGit(["commit", "-m", cleanMessage], at: projectRoot).output
-        log += try runGit(["push", "-u", "origin", branch], at: projectRoot).output
-        return log.isEmpty ? "Pushed \(branch)." : log
+        _ = try runGit(["commit", "-m", cleanMessage], at: projectRoot)
+        _ = try runGit(["push", "-u", "origin", branch], at: projectRoot)
+        return "Pushed to \(branch) (\(stagedCount) \(stagedCount == 1 ? "file" : "files"))."
     }
 
     private func isRepository(at projectRoot: URL) -> Bool {
@@ -128,15 +135,27 @@ final class GitService {
         process.standardError = pipe
 
         try process.run()
-        process.waitUntilExit()
-
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
         let output = String(data: data, encoding: .utf8) ?? ""
         guard process.terminationStatus == 0 else {
             throw GitServiceError.commandFailed(output.trimmingCharacters(in: .whitespacesAndNewlines))
         }
 
         return GitCommandResult(output: output)
+    }
+
+    private func summarizeChanges(_ changes: String) -> String {
+        let lines = changes
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .map(String.init)
+        let preview = lines.prefix(8).joined(separator: "\n")
+
+        if lines.count <= 8 {
+            return preview
+        }
+
+        return "\(lines.count) changed files\n\(preview)\n..."
     }
 
     private func gitExecutableURL() throws -> URL {
@@ -182,7 +201,7 @@ enum GitServiceError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .commandFailed(let output):
-            return output.isEmpty ? "Git command failed." : output
+            return output.isEmpty ? "Git command failed." : "Git command failed: \(output)"
         case .emptyCommitMessage:
             return "Commit message is required."
         case .invalidBranch:

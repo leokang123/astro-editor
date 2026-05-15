@@ -34,14 +34,6 @@ struct CommitPushSheet: View {
                             .foregroundStyle(.secondary)
                         Text(changesText)
                     }
-
-                    GridRow {
-                        Text("Details")
-                            .foregroundStyle(.secondary)
-                        Text(store.gitStatus.summary)
-                            .lineLimit(3)
-                            .textSelection(.enabled)
-                    }
                 }
                 .padding(8)
             }
@@ -55,14 +47,13 @@ struct CommitPushSheet: View {
             }
 
             if !store.gitLog.isEmpty {
-                ScrollView {
-                    Text(store.gitLog)
-                        .font(.system(.caption, design: .monospaced))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                }
-                .frame(minHeight: 80)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                Text(store.gitLog)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                    .textSelection(.enabled)
             }
 
             HStack {
@@ -91,14 +82,18 @@ struct CommitPushSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 520)
+        .frame(width: 480)
         .onAppear {
             store.refreshGitStatus()
         }
     }
 
     private var changesText: String {
+        if store.gitStatus.summary == "Loading Git status..." {
+            return "Checking..."
+        }
         guard store.gitStatus.isRepository else { return "Unavailable" }
-        return store.gitStatus.hasChanges ? "Changed files found" : "Working tree clean"
+        guard store.gitStatus.hasChanges else { return "Working tree clean" }
+        return store.gitStatus.summary.components(separatedBy: "\n").first ?? "Changed files found"
     }
 }

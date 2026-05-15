@@ -6,6 +6,7 @@ struct NewDocumentSheet: View {
     @State private var title = ""
     @State private var description = ""
     @State private var tags = "일반"
+    @State private var order = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -27,6 +28,14 @@ struct NewDocumentSheet: View {
                     .textFieldStyle(.roundedBorder)
             }
 
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Order")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextField("Optional, e.g. 1", text: $order)
+                    .textFieldStyle(.roundedBorder)
+            }
+
             Text("Location: \(locationText)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -40,6 +49,7 @@ struct NewDocumentSheet: View {
                         title: title,
                         description: description,
                         tagsText: tags,
+                        order: order,
                         parentID: store.selectionID
                     )
                     activeSheet = nil

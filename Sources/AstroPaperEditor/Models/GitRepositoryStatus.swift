@@ -6,13 +6,16 @@ struct GitRepositoryStatus: Equatable {
     var remoteURL: String
     var hasChanges: Bool
     var summary: String
+    var projectRootPath: String
+    var gitExecutablePath: String
 
     static let unknown = GitRepositoryStatus(
         isRepository: false,
         branch: "",
         remoteURL: "",
         hasChanges: false,
-        summary: "Git status not loaded"
+        summary: "Git status not loaded",
+        projectRootPath: "",
+        gitExecutablePath: ""
     )
 }
-

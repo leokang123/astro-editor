@@ -2,16 +2,18 @@ import Foundation
 
 struct Frontmatter: Equatable {
     var title: String
+    var order: String?
     var pubDatetime: String
     var modDatetime: String
     var description: String
     var tags: [String]
     var extraLines: [String]
 
-    static func new(title: String, description: String, tags: [String], now: Date = Date()) -> Frontmatter {
+    static func new(title: String, description: String, tags: [String], order: String? = nil, now: Date = Date()) -> Frontmatter {
         let timestamp = DateFormatting.astropaperTimestamp.string(from: now)
         return Frontmatter(
             title: title,
+            order: normalizedOrder(order),
             pubDatetime: timestamp,
             modDatetime: timestamp,
             description: description,
@@ -26,6 +28,7 @@ struct Frontmatter: Equatable {
             return (
                 Frontmatter(
                     title: fallbackTitle,
+                    order: nil,
                     pubDatetime: DateFormatting.astropaperTimestamp.string(from: Date()),
                     modDatetime: DateFormatting.astropaperTimestamp.string(from: Date()),
                     description: "",
@@ -41,6 +44,7 @@ struct Frontmatter: Equatable {
             return (
                 Frontmatter(
                     title: fallbackTitle,
+                    order: nil,
                     pubDatetime: DateFormatting.astropaperTimestamp.string(from: Date()),
                     modDatetime: DateFormatting.astropaperTimestamp.string(from: Date()),
                     description: "",
@@ -59,6 +63,7 @@ struct Frontmatter: Equatable {
         let body = String(normalized[bodyStart...])
 
         var title = fallbackTitle
+        var order: String?
         var pubDatetime = ""
         var modDatetime = ""
         var description = ""
@@ -77,6 +82,8 @@ struct Frontmatter: Equatable {
 
             if line.hasPrefix("title:") {
                 title = Self.scalarValue(from: line)
+            } else if line.hasPrefix("order:") {
+                order = Self.normalizedOrder(Self.scalarValue(from: line))
             } else if line.hasPrefix("pubDatetime:") {
                 pubDatetime = Self.scalarValue(from: line)
             } else if line.hasPrefix("modDatetime:") {
@@ -100,6 +107,7 @@ struct Frontmatter: Equatable {
         return (
             Frontmatter(
                 title: title,
+                order: order,
                 pubDatetime: pubDatetime.isEmpty ? now : pubDatetime,
                 modDatetime: modDatetime.isEmpty ? now : modDatetime,
                 description: description,
@@ -113,12 +121,19 @@ struct Frontmatter: Equatable {
     func rendered() -> String {
         var lines: [String] = [
             "---",
-            "title: \"\(Self.escape(title))\"",
+            "title: \"\(Self.escape(title))\""
+        ]
+
+        if let order = Self.normalizedOrder(order) {
+            lines.append("order: \(order)")
+        }
+
+        lines.append(contentsOf: [
             "pubDatetime: \(pubDatetime)",
             "modDatetime: \(modDatetime)",
             "description: \"\(Self.escape(description))\"",
             "tags:"
-        ]
+        ])
 
         if tags.isEmpty {
             lines.append("  - 일반")
@@ -141,6 +156,11 @@ struct Frontmatter: Equatable {
             return String(raw.dropFirst().dropLast()).replacingOccurrences(of: "\\\"", with: "\"")
         }
         return raw
+    }
+
+    private static func normalizedOrder(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private static func tagValue(from line: String) -> String? {

@@ -181,7 +181,7 @@ final class BlogStore: ObservableObject {
         }
     }
 
-    func createDocument(title: String, description: String, tagsText: String, parentID: String?) {
+    func createDocument(title: String, description: String, tagsText: String, order: String?, parentID: String?) {
         guard confirmDiscardOrSaveChanges() else { return }
         do {
             let parent = categoryURL(for: parentID)
@@ -189,6 +189,7 @@ final class BlogStore: ObservableObject {
                 title: title,
                 description: description,
                 tags: tagsText.trimmingForTags,
+                order: order,
                 under: parent
             )
             rescan()
@@ -312,8 +313,23 @@ final class BlogStore: ObservableObject {
     }
 
     func refreshGitStatus() {
-        Task {
-            gitStatus = await gitService.status(at: projectRoot)
+        let root = projectRoot
+        let service = gitService
+        gitStatus = GitRepositoryStatus(
+            isRepository: false,
+            branch: "",
+            remoteURL: "",
+            hasChanges: false,
+            summary: "Loading Git status...",
+            projectRootPath: root.path,
+            gitExecutablePath: ""
+        )
+
+        Task.detached { [service, root] in
+            let status = await service.status(at: root)
+            await MainActor.run { [weak self] in
+                self?.gitStatus = status
+            }
         }
     }
 
