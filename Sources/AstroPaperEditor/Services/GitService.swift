@@ -10,11 +10,11 @@ final class GitService {
                 branch: "",
                 remoteURL: "",
                 hasChanges: false,
-                summary: "Git is not initialized"
+                summary: error.localizedDescription
             )
         }
 
-        let branch = (try? runGit(["branch", "--show-current"], at: projectRoot).trimmedOutput) ?? ""
+        let branch = currentBranch(at: projectRoot)
         let remote = (try? runGit(["remote", "get-url", "origin"], at: projectRoot).trimmedOutput) ?? ""
         let changes = (try? runGit(["status", "--short"], at: projectRoot).trimmedOutput) ?? ""
 
@@ -67,7 +67,7 @@ final class GitService {
             throw GitServiceError.missingRemote
         }
 
-        let branch = (try? runGit(["branch", "--show-current"], at: projectRoot).trimmedOutput) ?? ""
+        let branch = currentBranch(at: projectRoot)
         guard !branch.isEmpty else {
             throw GitServiceError.missingBranch
         }
@@ -98,12 +98,30 @@ final class GitService {
         (try? runGit(["remote", "get-url", "origin"], at: projectRoot).trimmedOutput.isEmpty) == false
     }
 
+    private func currentBranch(at projectRoot: URL) -> String {
+        let commands = [
+            ["branch", "--show-current"],
+            ["symbolic-ref", "--quiet", "--short", "HEAD"],
+            ["rev-parse", "--abbrev-ref", "HEAD"],
+        ]
+
+        for command in commands {
+            let output = (try? runGit(command, at: projectRoot).trimmedOutput) ?? ""
+            if !output.isEmpty, output != "HEAD" {
+                return output
+            }
+        }
+
+        return ""
+    }
+
     @discardableResult
     private func runGit(_ arguments: [String], at projectRoot: URL) throws -> GitCommandResult {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["git"] + arguments
+        process.executableURL = try gitExecutableURL()
+        process.arguments = arguments
         process.currentDirectoryURL = projectRoot
+        process.environment = processEnvironment()
 
         let pipe = Pipe()
         process.standardOutput = pipe
@@ -120,6 +138,27 @@ final class GitService {
 
         return GitCommandResult(output: output)
     }
+
+    private func gitExecutableURL() throws -> URL {
+        let candidates = [
+            "/opt/homebrew/bin/git",
+            "/usr/local/bin/git",
+            "/usr/bin/git",
+        ]
+
+        for path in candidates where FileManager.default.isExecutableFile(atPath: path) {
+            return URL(fileURLWithPath: path)
+        }
+
+        throw GitServiceError.gitNotFound
+    }
+
+    private func processEnvironment() -> [String: String] {
+        var environment = ProcessInfo.processInfo.environment
+        environment["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        environment["HOME"] = NSHomeDirectory()
+        return environment
+    }
 }
 
 private struct GitCommandResult {
@@ -135,6 +174,7 @@ enum GitServiceError: LocalizedError {
     case emptyCommitMessage
     case invalidBranch
     case invalidRemoteURL
+    case gitNotFound
     case missingBranch
     case missingRemote
     case notRepository
@@ -149,6 +189,8 @@ enum GitServiceError: LocalizedError {
             return "Branch name is required."
         case .invalidRemoteURL:
             return "Remote URL is required."
+        case .gitNotFound:
+            return "Git executable was not found. Install Git or Xcode Command Line Tools."
         case .missingBranch:
             return "Current Git branch could not be detected."
         case .missingRemote:
@@ -158,4 +200,3 @@ enum GitServiceError: LocalizedError {
         }
     }
 }
-

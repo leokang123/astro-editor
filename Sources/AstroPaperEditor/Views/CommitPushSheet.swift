@@ -32,7 +32,15 @@ struct CommitPushSheet: View {
                     GridRow {
                         Text("Changes")
                             .foregroundStyle(.secondary)
-                        Text(store.gitStatus.hasChanges ? "Changed files found" : "Working tree clean")
+                        Text(changesText)
+                    }
+
+                    GridRow {
+                        Text("Details")
+                            .foregroundStyle(.secondary)
+                        Text(store.gitStatus.summary)
+                            .lineLimit(3)
+                            .textSelection(.enabled)
                     }
                 }
                 .padding(8)
@@ -88,5 +96,9 @@ struct CommitPushSheet: View {
             store.refreshGitStatus()
         }
     }
-}
 
+    private var changesText: String {
+        guard store.gitStatus.isRepository else { return "Unavailable" }
+        return store.gitStatus.hasChanges ? "Changed files found" : "Working tree clean"
+    }
+}

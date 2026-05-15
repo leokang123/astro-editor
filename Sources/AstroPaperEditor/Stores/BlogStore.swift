@@ -70,6 +70,7 @@ final class BlogStore: ObservableObject {
     func loadDefaultProjectIfAvailable() {
         guard tree.isEmpty, fileService.validateProjectRoot(projectRoot) else { return }
         rescan()
+        refreshGitStatus()
     }
 
     func chooseProjectFolder() {
@@ -92,6 +93,7 @@ final class BlogStore: ObservableObject {
             editorBodyProvider = nil
             selectionID = nil
             rescan()
+            refreshGitStatus()
         }
     }
 

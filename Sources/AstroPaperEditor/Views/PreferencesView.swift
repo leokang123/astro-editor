@@ -658,7 +658,15 @@ private struct GitPreferencesView: View {
                     GridRow {
                         Text("Changes")
                             .foregroundStyle(.secondary)
-                        Text(store.gitStatus.hasChanges ? "Changed files found" : "Working tree clean")
+                        Text(changesText)
+                    }
+
+                    GridRow {
+                        Text("Details")
+                            .foregroundStyle(.secondary)
+                        Text(store.gitStatus.summary)
+                            .lineLimit(3)
+                            .textSelection(.enabled)
                     }
                 }
                 .padding(8)
@@ -734,6 +742,11 @@ private struct GitPreferencesView: View {
         if !store.gitStatus.branch.isEmpty {
             branch = store.gitStatus.branch
         }
+    }
+
+    private var changesText: String {
+        guard store.gitStatus.isRepository else { return "Unavailable" }
+        return store.gitStatus.hasChanges ? "Changed files found" : "Working tree clean"
     }
 }
 
