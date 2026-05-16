@@ -12,19 +12,17 @@ final class BlogStore: ObservableObject {
     @Published var statusText = "Ready"
     @Published var buildLog = ""
     @Published var isBuilding = false
-    @Published var gitLog = ""
-    @Published var gitStatus = GitRepositoryStatus.unknown
-    @Published var isGitOperationRunning = false
     @Published var assetCleanupMessage = ""
     @Published var isAssetScanRunning = false
     @Published var isAssetOptimizeRunning = false
     @Published var message: AppMessage?
     @Published var editorMode: EditorMode = .edit
 
+    let gitController = GitController()
+
     private let fileService = BlogFileService()
     private let imageService = ImageService()
     private let buildService = BuildService()
-    private let gitService = GitService()
     private let sitePageService = SitePageService()
     private let siteSettingsService = SiteSettingsService()
     private let maxBuildLogLength = 20_000
@@ -57,7 +55,7 @@ final class BlogStore: ObservableObject {
     }
 
     var canCommitAndPush: Bool {
-        !isGitOperationRunning
+        gitController.canRunOperation
     }
 
     var selectedNode: BlogNode? {
@@ -409,65 +407,29 @@ final class BlogStore: ObservableObject {
     }
 
     func refreshGitStatus() {
-        let root = projectRoot
-        let service = gitService
-        gitStatus = GitRepositoryStatus(
-            isRepository: false,
-            branch: "",
-            remoteURL: "",
-            hasChanges: false,
-            summary: "Loading Git status...",
-            projectRootPath: root.path,
-            gitExecutablePath: ""
-        )
-
-        Task.detached { [service, root] in
-            let status = await service.status(at: root)
-            await MainActor.run { [weak self] in
-                self?.gitStatus = status
-            }
-        }
+        gitController.refreshStatus(at: projectRoot)
     }
 
     func configureGit(remoteURL: String, branch: String) {
-        guard !isGitOperationRunning else { return }
-        isGitOperationRunning = true
-        gitLog = ""
-        statusText = "Configuring Git..."
-
-        Task {
-            do {
-                gitLog = try gitService.configure(at: projectRoot, remoteURL: remoteURL, branch: branch)
-                gitStatus = await gitService.status(at: projectRoot)
-                isGitOperationRunning = false
-                statusText = "Git remote configured"
-            } catch {
-                isGitOperationRunning = false
-                message = AppMessage(text: error.localizedDescription)
-            }
-        }
+        gitController.configure(
+            at: projectRoot,
+            remoteURL: remoteURL,
+            branch: branch,
+            onStatusText: { [weak self] text in self?.statusText = text },
+            onError: { [weak self] text in self?.message = AppMessage(text: text) }
+        )
     }
 
     func commitAndPush(message commitMessage: String) {
-        guard !isGitOperationRunning else { return }
+        guard gitController.canRunOperation else { return }
         guard confirmDiscardOrSaveChanges() else { return }
 
-        isGitOperationRunning = true
-        gitLog = ""
-        statusText = "Committing and pushing..."
-
-        Task {
-            do {
-                let output = try await gitService.commitAndPush(at: projectRoot, message: commitMessage)
-                gitLog = output
-                gitStatus = await gitService.status(at: projectRoot)
-                isGitOperationRunning = false
-                statusText = output == "No changes to commit." ? "No changes to commit" : "Pushed to GitHub"
-            } catch {
-                isGitOperationRunning = false
-                message = AppMessage(text: error.localizedDescription)
-            }
-        }
+        gitController.commitAndPush(
+            at: projectRoot,
+            message: commitMessage,
+            onStatusText: { [weak self] text in self?.statusText = text },
+            onError: { [weak self] text in self?.message = AppMessage(text: text) }
+        )
     }
 
     func openWebsite() {

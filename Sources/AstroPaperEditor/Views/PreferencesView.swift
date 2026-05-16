@@ -31,7 +31,12 @@ struct PreferencesView: View {
                     Label("Assets", systemImage: "photo.stack")
                 }
 
-            GitPreferencesView(store: store)
+            GitPreferencesView(
+                gitController: store.gitController,
+                projectRoot: store.projectRoot,
+                onRefreshGitStatus: store.refreshGitStatus,
+                onConfigureGit: store.configureGit
+            )
                 .tabItem {
                     Label("Git", systemImage: "arrow.up.circle")
                 }
@@ -778,7 +783,10 @@ private struct AboutPagePreferencesView: View {
 }
 
 private struct GitPreferencesView: View {
-    @ObservedObject var store: BlogStore
+    @ObservedObject var gitController: GitController
+    let projectRoot: URL
+    var onRefreshGitStatus: () -> Void
+    var onConfigureGit: (String, String) -> Void
     @State private var remoteURL = ""
     @State private var branch = "main"
 
@@ -797,11 +805,11 @@ private struct GitPreferencesView: View {
                 Spacer()
 
                 Button {
-                    store.refreshGitStatus()
+                    onRefreshGitStatus()
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
-                .disabled(store.isGitOperationRunning)
+                .disabled(gitController.isOperationRunning)
             }
 
             GroupBox("Status") {
@@ -809,7 +817,7 @@ private struct GitPreferencesView: View {
                     GridRow {
                         Text("Project")
                             .foregroundStyle(.secondary)
-                        Text(store.gitStatus.projectRootPath.isEmpty ? store.projectRoot.path : store.gitStatus.projectRootPath)
+                        Text(gitController.status.projectRootPath.isEmpty ? projectRoot.path : gitController.status.projectRootPath)
                             .lineLimit(1)
                             .truncationMode(.middle)
                             .textSelection(.enabled)
@@ -818,7 +826,7 @@ private struct GitPreferencesView: View {
                     GridRow {
                         Text("Git")
                             .foregroundStyle(.secondary)
-                        Text(store.gitStatus.gitExecutablePath.isEmpty ? "-" : store.gitStatus.gitExecutablePath)
+                        Text(gitController.status.gitExecutablePath.isEmpty ? "-" : gitController.status.gitExecutablePath)
                             .lineLimit(1)
                             .truncationMode(.middle)
                             .textSelection(.enabled)
@@ -827,20 +835,20 @@ private struct GitPreferencesView: View {
                     GridRow {
                         Text("Repository")
                             .foregroundStyle(.secondary)
-                        Text(store.gitStatus.isRepository ? "Initialized" : "Not initialized")
+                        Text(gitController.status.isRepository ? "Initialized" : "Not initialized")
                     }
 
                     GridRow {
                         Text("Branch")
                             .foregroundStyle(.secondary)
-                        Text(store.gitStatus.branch.isEmpty ? "-" : store.gitStatus.branch)
+                        Text(gitController.status.branch.isEmpty ? "-" : gitController.status.branch)
                             .textSelection(.enabled)
                     }
 
                     GridRow {
                         Text("Remote")
                             .foregroundStyle(.secondary)
-                        Text(store.gitStatus.remoteURL.isEmpty ? "Not configured" : store.gitStatus.remoteURL)
+                        Text(gitController.status.remoteURL.isEmpty ? "Not configured" : gitController.status.remoteURL)
                             .lineLimit(1)
                             .truncationMode(.middle)
                             .textSelection(.enabled)
@@ -855,7 +863,7 @@ private struct GitPreferencesView: View {
                     GridRow {
                         Text("Details")
                             .foregroundStyle(.secondary)
-                        Text(store.gitStatus.summary)
+                        Text(gitController.status.summary)
                             .lineLimit(6)
                             .textSelection(.enabled)
                     }
@@ -892,16 +900,16 @@ private struct GitPreferencesView: View {
                 Spacer()
 
                 Button {
-                    store.configureGit(remoteURL: remoteURL, branch: branch)
+                    onConfigureGit(remoteURL, branch)
                 } label: {
-                    Label(store.gitStatus.isRepository ? "Update Remote" : "Initialize Git", systemImage: "gearshape")
+                    Label(gitController.status.isRepository ? "Update Remote" : "Initialize Git", systemImage: "gearshape")
                 }
-                .disabled(store.isGitOperationRunning || remoteURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || branch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(gitController.isOperationRunning || remoteURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || branch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
 
-            if !store.gitLog.isEmpty {
+            if !gitController.log.isEmpty {
                 ScrollView {
-                    Text(store.gitLog)
+                    Text(gitController.log)
                         .font(.system(.caption, design: .monospaced))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .textSelection(.enabled)
@@ -913,10 +921,10 @@ private struct GitPreferencesView: View {
             }
         }
         .onAppear {
-            store.refreshGitStatus()
+            onRefreshGitStatus()
             loadCurrentStatusIntoFields()
         }
-        .onChange(of: store.gitStatus) { status in
+        .onChange(of: gitController.status) { status in
             if !status.remoteURL.isEmpty {
                 remoteURL = status.remoteURL
             }
@@ -927,17 +935,17 @@ private struct GitPreferencesView: View {
     }
 
     private func loadCurrentStatusIntoFields() {
-        if !store.gitStatus.remoteURL.isEmpty {
-            remoteURL = store.gitStatus.remoteURL
+        if !gitController.status.remoteURL.isEmpty {
+            remoteURL = gitController.status.remoteURL
         }
-        if !store.gitStatus.branch.isEmpty {
-            branch = store.gitStatus.branch
+        if !gitController.status.branch.isEmpty {
+            branch = gitController.status.branch
         }
     }
 
     private var changesText: String {
-        guard store.gitStatus.isRepository else { return "Unavailable" }
-        return store.gitStatus.hasChanges ? "Changed files found" : "Working tree clean"
+        guard gitController.status.isRepository else { return "Unavailable" }
+        return gitController.status.hasChanges ? "Changed files found" : "Working tree clean"
     }
 }
 

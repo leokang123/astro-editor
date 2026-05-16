@@ -1,9 +1,11 @@
 import SwiftUI
 
 struct CommitPushSheet: View {
-    @ObservedObject var store: BlogStore
+    @ObservedObject var gitController: GitController
     @Binding var activeSheet: ActiveSheet?
     @State private var commitMessage = "Update blog"
+    var onRefreshGitStatus: () -> Void
+    var onCommitAndPush: (String) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -16,14 +18,14 @@ struct CommitPushSheet: View {
                     GridRow {
                         Text("Branch")
                             .foregroundStyle(.secondary)
-                        Text(store.gitStatus.branch.isEmpty ? "-" : store.gitStatus.branch)
+                        Text(gitController.status.branch.isEmpty ? "-" : gitController.status.branch)
                             .textSelection(.enabled)
                     }
 
                     GridRow {
                         Text("Remote")
                             .foregroundStyle(.secondary)
-                        Text(store.gitStatus.remoteURL.isEmpty ? "Not configured" : store.gitStatus.remoteURL)
+                        Text(gitController.status.remoteURL.isEmpty ? "Not configured" : gitController.status.remoteURL)
                             .lineLimit(1)
                             .truncationMode(.middle)
                             .textSelection(.enabled)
@@ -46,8 +48,8 @@ struct CommitPushSheet: View {
                     .textFieldStyle(.roundedBorder)
             }
 
-            if !store.gitLog.isEmpty {
-                Text(store.gitLog)
+            if !gitController.log.isEmpty {
+                Text(gitController.log)
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -58,11 +60,11 @@ struct CommitPushSheet: View {
 
             HStack {
                 Button {
-                    store.refreshGitStatus()
+                    onRefreshGitStatus()
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
-                .disabled(store.isGitOperationRunning)
+                .disabled(gitController.isOperationRunning)
 
                 Spacer()
 
@@ -70,30 +72,30 @@ struct CommitPushSheet: View {
                     activeSheet = nil
                 }
                 .keyboardShortcut(.cancelAction)
-                .disabled(store.isGitOperationRunning)
+                .disabled(gitController.isOperationRunning)
 
                 Button {
-                    store.commitAndPush(message: commitMessage)
+                    onCommitAndPush(commitMessage)
                 } label: {
-                    Label(store.isGitOperationRunning ? "Pushing" : "Commit & Push", systemImage: "paperplane")
+                    Label(gitController.isOperationRunning ? "Pushing" : "Commit & Push", systemImage: "paperplane")
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(store.isGitOperationRunning || commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(gitController.isOperationRunning || commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
         .padding(20)
         .frame(width: 480)
         .onAppear {
-            store.refreshGitStatus()
+            onRefreshGitStatus()
         }
     }
 
     private var changesText: String {
-        if store.gitStatus.summary == "Loading Git status..." {
+        if gitController.status.summary == "Loading Git status..." {
             return "Checking..."
         }
-        guard store.gitStatus.isRepository else { return "Unavailable" }
-        guard store.gitStatus.hasChanges else { return "Working tree clean" }
-        return store.gitStatus.summary.components(separatedBy: "\n").first ?? "Changed files found"
+        guard gitController.status.isRepository else { return "Unavailable" }
+        guard gitController.status.hasChanges else { return "Working tree clean" }
+        return gitController.status.summary.components(separatedBy: "\n").first ?? "Changed files found"
     }
 }

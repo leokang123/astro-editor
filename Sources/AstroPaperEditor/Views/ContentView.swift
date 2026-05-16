@@ -2,9 +2,15 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var store: BlogStore
+    @ObservedObject private var gitController: GitController
     @State private var activeSheet: ActiveSheet?
     @SceneStorage("showSidebar") private var showSidebar = true
     @SceneStorage("showInspector") private var showInspector = true
+
+    init(store: BlogStore) {
+        self.store = store
+        self._gitController = ObservedObject(wrappedValue: store.gitController)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -97,9 +103,9 @@ struct ContentView: View {
                 Button {
                     activeSheet = .commitPush
                 } label: {
-                    Label(store.isGitOperationRunning ? "Pushing" : "Commit & Push", systemImage: "paperplane")
+                    Label(gitController.isOperationRunning ? "Pushing" : "Commit & Push", systemImage: "paperplane")
                 }
-                .disabled(!store.canCommitAndPush)
+                .disabled(!gitController.canRunOperation)
 
                 Button {
                     store.openWebsite()
@@ -117,7 +123,12 @@ struct ContentView: View {
             case .move:
                 MoveSheet(store: store, activeSheet: $activeSheet)
             case .commitPush:
-                CommitPushSheet(store: store, activeSheet: $activeSheet)
+                CommitPushSheet(
+                    gitController: gitController,
+                    activeSheet: $activeSheet,
+                    onRefreshGitStatus: store.refreshGitStatus,
+                    onCommitAndPush: store.commitAndPush
+                )
             }
         }
         .alert(item: $store.message) { message in
