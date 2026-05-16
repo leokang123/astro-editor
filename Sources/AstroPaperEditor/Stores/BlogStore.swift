@@ -16,6 +16,8 @@ final class BlogStore: ObservableObject {
     @Published var gitStatus = GitRepositoryStatus.unknown
     @Published var isGitOperationRunning = false
     @Published var assetCleanupMessage = ""
+    @Published var isAssetScanRunning = false
+    @Published var isAssetOptimizeRunning = false
     @Published var message: AppMessage?
     @Published var editorMode: EditorMode = .edit
 
@@ -496,26 +498,46 @@ final class BlogStore: ObservableObject {
         statusText = "Opened \(BuildService.localPreviewURL.absoluteString)"
     }
 
-    func previewUnusedAssetImages() -> AssetImageCleanupPreview? {
+    func previewUnusedAssetImages() async -> AssetImageCleanupPreview? {
+        guard !isAssetScanRunning, !isAssetOptimizeRunning else { return nil }
+        isAssetScanRunning = true
+        assetCleanupMessage = "Scanning assets/images..."
+        let root = projectRoot
+
         do {
-            let preview = try assetImageCleanupService.preview(projectRoot: projectRoot)
+            let preview = try await Task.detached(priority: .utility) {
+                try AssetImageCleanupService().preview(projectRoot: root)
+            }.value
             assetCleanupMessage = "\(preview.unusedCount) unused of \(preview.allImageCount) images"
+            isAssetScanRunning = false
             return preview
         } catch {
             assetCleanupMessage = error.localizedDescription
+            isAssetScanRunning = false
             message = AppMessage(text: error.localizedDescription)
             return nil
         }
     }
 
-    func moveUnusedAssetImagesToTrash() {
+    func moveAssetImagesToTrash(_ imageURLs: [URL]) async -> AssetImageCleanupResult? {
+        guard !isAssetScanRunning, !isAssetOptimizeRunning else { return nil }
+        guard !imageURLs.isEmpty else { return AssetImageCleanupResult(trashedImages: []) }
+        isAssetOptimizeRunning = true
+        assetCleanupMessage = "Moving \(imageURLs.count) unused images to Trash..."
+
         do {
-            let result = try assetImageCleanupService.moveUnusedImagesToTrash(projectRoot: projectRoot)
+            let result = try await Task.detached(priority: .utility) {
+                try AssetImageCleanupService().moveImagesToTrash(imageURLs)
+            }.value
             assetCleanupMessage = "Moved \(result.trashedImages.count) unused images to Trash"
             statusText = assetCleanupMessage
+            isAssetOptimizeRunning = false
+            return result
         } catch {
             assetCleanupMessage = error.localizedDescription
+            isAssetOptimizeRunning = false
             message = AppMessage(text: error.localizedDescription)
+            return nil
         }
     }
 

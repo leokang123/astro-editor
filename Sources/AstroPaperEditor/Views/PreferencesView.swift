@@ -522,7 +522,7 @@ private struct AssetImagePreferencesView: View {
                     Text("Asset Images")
                         .font(.title2)
                         .fontWeight(.semibold)
-                    Text("Finds files in src/assets/images that are not referenced by project source files.")
+                    Text("Finds files in src/assets/images that are not referenced by blog and page source files.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -532,20 +532,21 @@ private struct AssetImagePreferencesView: View {
                 Button {
                     scan()
                 } label: {
-                    Label("Scan", systemImage: "magnifyingglass")
+                    Label(store.isAssetScanRunning ? "Scanning" : "Scan", systemImage: "magnifyingglass")
                 }
+                .disabled(store.isAssetScanRunning || store.isAssetOptimizeRunning)
 
                 Button {
                     optimize()
                 } label: {
-                    Label("Optimize", systemImage: "trash")
+                    Label(store.isAssetOptimizeRunning ? "Optimizing" : "Optimize", systemImage: "trash")
                 }
-                .disabled(preview?.unusedImages.isEmpty != false)
+                .disabled(store.isAssetScanRunning || store.isAssetOptimizeRunning || preview?.unusedImages.isEmpty != false)
             }
 
             GroupBox("Rule") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("A file is kept when its filename appears in src or public source files.")
+                    Text("A file is kept when its filename appears in blog posts, pages, layouts, components, or site settings.")
                     Text("Unused files are moved to the macOS Trash, not permanently deleted.")
                         .foregroundStyle(.secondary)
                     Text(store.projectRoot.appendingPathComponent("src/assets/images", isDirectory: true).path)
@@ -559,7 +560,16 @@ private struct AssetImagePreferencesView: View {
                 .padding(8)
             }
 
-            if let preview {
+            if store.isAssetScanRunning || store.isAssetOptimizeRunning {
+                VStack(spacing: 10) {
+                    ProgressView()
+                    Text(store.isAssetScanRunning ? "Scanning asset references..." : "Moving unused images to Trash...")
+                        .font(.headline)
+                    Text("You can keep using the app while this runs.")
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let preview {
                 GroupBox("Scan Result") {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
@@ -631,8 +641,13 @@ private struct AssetImagePreferencesView: View {
     }
 
     private func scan() {
-        preview = store.previewUnusedAssetImages()
-        message = store.assetCleanupMessage
+        message = "Scanning assets/images..."
+        Task {
+            if let result = await store.previewUnusedAssetImages() {
+                preview = result
+            }
+            message = store.assetCleanupMessage
+        }
     }
 
     private func optimize() {
@@ -645,9 +660,21 @@ private struct AssetImagePreferencesView: View {
         alert.addButton(withTitle: "Cancel")
 
         guard alert.runModal() == .alertFirstButtonReturn else { return }
-        store.moveUnusedAssetImagesToTrash()
-        self.preview = store.previewUnusedAssetImages()
-        message = store.assetCleanupMessage
+        let imagesToTrash = preview.unusedImages
+        message = "Moving unused images to Trash..."
+        Task {
+            guard let result = await store.moveAssetImagesToTrash(imagesToTrash) else {
+                message = store.assetCleanupMessage
+                return
+            }
+
+            let trashedPaths = Set(result.trashedImages.map { $0.standardizedFileURL.path })
+            var updatedPreview = preview
+            updatedPreview.unusedImages.removeAll { trashedPaths.contains($0.standardizedFileURL.path) }
+            updatedPreview.allImageCount = max(0, updatedPreview.allImageCount - result.trashedImages.count)
+            self.preview = updatedPreview
+            message = store.assetCleanupMessage
+        }
     }
 }
 
