@@ -119,23 +119,36 @@ struct MarkdownPreviewView: NSViewRepresentable {
             let script = """
             (() => {
               const targetLine = \(line);
-              const elements = Array.from(document.querySelectorAll("[data-source-line]"));
-              if (!elements.length) return;
-              let best = elements[0];
-              let bestLine = Number(best.dataset.sourceLine || "1");
-              for (const element of elements) {
-                const line = Number(element.dataset.sourceLine || "1");
-                if (line <= targetLine && line >= bestLine) {
-                  best = element;
+              const reveal = () => document.body.classList.add("preview-ready");
+              const scrollToTargetLine = () => {
+                const elements = Array.from(document.querySelectorAll("[data-source-line]"));
+                if (!elements.length) return;
+                let best = elements[0];
+                let bestLine = Number(best.dataset.sourceLine || "1");
+                for (const element of elements) {
+                  const line = Number(element.dataset.sourceLine || "1");
+                  if (line <= targetLine && line >= bestLine) {
+                    best = element;
+                    bestLine = line;
+                  }
                 }
-              }
-              best.scrollIntoView({ block: "start" });
+                best.scrollIntoView({ block: "start" });
+              };
+              Promise.resolve(window.previewEnhancementsReady)
+                .catch(() => {})
+                .finally(() => {
+                  scrollToTargetLine();
+                  requestAnimationFrame(() => {
+                    scrollToTargetLine();
+                    window.setTimeout(() => {
+                      scrollToTargetLine();
+                      reveal();
+                    }, 80);
+                  });
+                });
             })();
             """
             DispatchQueue.main.async {
-                webView.evaluateJavaScript(script)
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 webView.evaluateJavaScript(script)
             }
         }
@@ -175,6 +188,10 @@ private struct MarkdownPreviewHTMLRenderer {
               box-sizing: border-box;
               padding: 28px;
               line-height: 1.68;
+              visibility: hidden;
+            }
+            body.preview-ready {
+              visibility: visible;
             }
             main {
               max-width: 860px;
@@ -261,7 +278,7 @@ private struct MarkdownPreviewHTMLRenderer {
           \(assets.katexAutoRenderScriptTag)
           \(assets.mermaidScriptTag)
           <script>
-            function renderPreviewEnhancements() {
+            async function renderPreviewEnhancements() {
               if (window.renderMathInElement) {
                 renderMathInElement(document.body, {
                   delimiters: [
@@ -280,14 +297,23 @@ private struct MarkdownPreviewHTMLRenderer {
                   securityLevel: "loose",
                   theme: dark ? "dark" : "default"
                 });
-                mermaid.run({ querySelector: ".mermaid" });
+                await mermaid.run({ querySelector: ".mermaid" });
               }
             }
-            if (document.readyState === "loading") {
-              document.addEventListener("DOMContentLoaded", renderPreviewEnhancements);
-            } else {
-              renderPreviewEnhancements();
+            function revealPreviewFallback() {
+              document.body.classList.add("preview-ready");
             }
+            if (document.readyState === "loading") {
+              window.previewEnhancementsReady = new Promise(resolve => {
+                document.addEventListener("DOMContentLoaded", async () => {
+                  await renderPreviewEnhancements();
+                  resolve();
+                }, { once: true });
+              });
+            } else {
+              window.previewEnhancementsReady = renderPreviewEnhancements();
+            }
+            window.setTimeout(revealPreviewFallback, 900);
           </script>
         </body>
         </html>
