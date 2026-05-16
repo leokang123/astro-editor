@@ -32,11 +32,15 @@ struct EditorView: View {
                         MarkdownTextView(
                             documentID: document.fileURL.path,
                             text: document.body,
+                            targetLine: store.editorTopLine,
                             onTextChange: {
                                 store.markBodyChanged()
                             },
                             onRegisterBodyProvider: { provider in
                                 store.setEditorBodyProvider(provider)
+                            },
+                            onRegisterTopLineProvider: { provider in
+                                store.setEditorTopLineProvider(provider)
                             },
                             onInsertImages: { images in
                                 store.insertImages(images)
@@ -44,7 +48,14 @@ struct EditorView: View {
                             onTogglePreview: store.toggleEditorMode
                         )
                     case .preview:
-                        MarkdownPreviewView(document: document, projectRoot: store.projectRoot)
+                        MarkdownPreviewView(
+                            document: document,
+                            projectRoot: store.projectRoot,
+                            sourceLine: store.editorTopLine,
+                            onSourceLineChange: { line in
+                                store.updateEditorTopLine(line)
+                            }
+                        )
                     }
                 }
             } else {

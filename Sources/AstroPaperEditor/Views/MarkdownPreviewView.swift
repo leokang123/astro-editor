@@ -5,13 +5,21 @@ import WebKit
 struct MarkdownPreviewView: NSViewRepresentable {
     let document: BlogDocument
     let projectRoot: URL
+    let sourceLine: Int
+    var onSourceLineChange: (Int) -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator()
+        Coordinator(onSourceLineChange: onSourceLineChange)
     }
 
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
+        configuration.userContentController.add(context.coordinator, name: "sourceLine")
+        configuration.userContentController.addUserScript(WKUserScript(
+            source: Self.sourceLineScript,
+            injectionTime: .atDocumentEnd,
+            forMainFrameOnly: true
+        ))
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.setValue(false, forKey: "drawsBackground")
         webView.navigationDelegate = context.coordinator
@@ -19,11 +27,14 @@ struct MarkdownPreviewView: NSViewRepresentable {
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
+        context.coordinator.sourceLine = sourceLine
+        context.coordinator.onSourceLineChange = onSourceLineChange
         let renderKey = [
             document.fileURL.path,
             document.frontmatter.title,
             document.frontmatter.description,
-            String(document.body.hashValue)
+            String(document.body.hashValue),
+            String(sourceLine)
         ].joined(separator: "\u{1F}")
         guard context.coordinator.renderKey != renderKey else { return }
         context.coordinator.renderKey = renderKey
@@ -32,8 +43,48 @@ struct MarkdownPreviewView: NSViewRepresentable {
         webView.loadHTMLString(html, baseURL: projectRoot)
     }
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: "sourceLine")
+    }
+
+    private static let sourceLineScript = """
+    (() => {
+      let scheduled = false;
+      const report = () => {
+        scheduled = false;
+        const elements = Array.from(document.querySelectorAll("[data-source-line]"));
+        if (!elements.length) return;
+        let best = elements[0];
+        let bestDistance = Math.abs(elements[0].getBoundingClientRect().top);
+        for (const element of elements) {
+          const rect = element.getBoundingClientRect();
+          if (rect.bottom < 0) continue;
+          const distance = Math.abs(rect.top);
+          if (distance < bestDistance) {
+            best = element;
+          }
+          if (rect.top >= 0) break;
+        }
+        const line = Number(best.dataset.sourceLine || "1");
+        window.webkit.messageHandlers.sourceLine.postMessage(line);
+      };
+      window.addEventListener("scroll", () => {
+        if (scheduled) return;
+        scheduled = true;
+        window.requestAnimationFrame(report);
+      }, { passive: true });
+      report();
+    })();
+    """
+
+    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var renderKey = ""
+        var sourceLine = 1
+        var onSourceLineChange: (Int) -> Void
+
+        init(onSourceLineChange: @escaping (Int) -> Void) {
+            self.onSourceLineChange = onSourceLineChange
+        }
 
         func webView(
             _ webView: WKWebView,
@@ -48,6 +99,45 @@ struct MarkdownPreviewView: NSViewRepresentable {
 
             NSWorkspace.shared.open(url)
             decisionHandler(.cancel)
+        }
+
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard message.name == "sourceLine" else { return }
+            if let line = message.body as? Int {
+                onSourceLineChange(line)
+            } else if let number = message.body as? NSNumber {
+                onSourceLineChange(number.intValue)
+            }
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            scrollToSourceLine(in: webView)
+        }
+
+        private func scrollToSourceLine(in webView: WKWebView) {
+            let line = max(sourceLine, 1)
+            let script = """
+            (() => {
+              const targetLine = \(line);
+              const elements = Array.from(document.querySelectorAll("[data-source-line]"));
+              if (!elements.length) return;
+              let best = elements[0];
+              let bestLine = Number(best.dataset.sourceLine || "1");
+              for (const element of elements) {
+                const line = Number(element.dataset.sourceLine || "1");
+                if (line <= targetLine && line >= bestLine) {
+                  best = element;
+                }
+              }
+              best.scrollIntoView({ block: "start" });
+            })();
+            """
+            DispatchQueue.main.async {
+                webView.evaluateJavaScript(script)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                webView.evaluateJavaScript(script)
+            }
         }
     }
 }
@@ -219,26 +309,34 @@ private struct MarkdownPreviewHTMLRenderer {
         var inCode = false
         var inBlockMath = false
         var blockMathLines: [String] = []
+        var paragraphStartLine = 1
+        var listStartLine = 1
+        var codeStartLine = 1
+        var blockMathStartLine = 1
+
+        func marker(_ line: Int) -> String {
+            " data-source-line=\"\(line)\""
+        }
 
         func flushParagraph() {
             guard !paragraph.isEmpty else { return }
-            html.append("<p>\(inlineHTML(paragraph.joined(separator: "\n")))</p>")
+            html.append("<p\(marker(paragraphStartLine))>\(inlineHTML(paragraph.joined(separator: "\n")))</p>")
             paragraph.removeAll()
         }
 
         func flushList() {
             guard !listItems.isEmpty else { return }
-            html.append("<ul>\(listItems.map { "<li>\(inlineHTML($0))</li>" }.joined())</ul>")
+            html.append("<ul\(marker(listStartLine))>\(listItems.map { "<li>\(inlineHTML($0))</li>" }.joined())</ul>")
             listItems.removeAll()
         }
 
         func flushCode() {
             let code = codeLines.joined(separator: "\n")
             if codeLanguage.lowercased() == "mermaid" {
-                html.append("<div class=\"mermaid\">\(escapeHTML(code))</div>")
+                html.append("<div class=\"mermaid\"\(marker(codeStartLine))>\(escapeHTML(code))</div>")
             } else {
                 let languageClass = codeLanguage.isEmpty ? "" : " class=\"language-\(escapeHTML(codeLanguage))\""
-                html.append("<pre><code\(languageClass)>\(escapeHTML(code))</code></pre>")
+                html.append("<pre\(marker(codeStartLine))><code\(languageClass)>\(escapeHTML(code))</code></pre>")
             }
             codeLines.removeAll()
             codeLanguage = ""
@@ -248,6 +346,7 @@ private struct MarkdownPreviewHTMLRenderer {
         var index = 0
         while index < lines.count {
             let line = lines[index]
+            let sourceLine = index + 1
             let trimmed = line.trimmingCharacters(in: .whitespaces)
 
             if trimmed.hasPrefix("```") {
@@ -258,6 +357,7 @@ private struct MarkdownPreviewHTMLRenderer {
                     flushParagraph()
                     flushList()
                     inCode = true
+                    codeStartLine = sourceLine
                     codeLanguage = String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces)
                 }
                 index += 1
@@ -272,13 +372,14 @@ private struct MarkdownPreviewHTMLRenderer {
 
             if trimmed == "$$" {
                 if inBlockMath {
-                    html.append("<p>$$\(escapeHTML(blockMathLines.joined(separator: "\n")))$$</p>")
+                    html.append("<p\(marker(blockMathStartLine))>$$\(escapeHTML(blockMathLines.joined(separator: "\n")))$$</p>")
                     blockMathLines.removeAll()
                     inBlockMath = false
                 } else {
                     flushParagraph()
                     flushList()
                     inBlockMath = true
+                    blockMathStartLine = sourceLine
                 }
                 index += 1
                 continue
@@ -300,7 +401,7 @@ private struct MarkdownPreviewHTMLRenderer {
             if trimmed == "---" || trimmed == "***" {
                 flushParagraph()
                 flushList()
-                html.append("<hr>")
+                html.append("<hr\(marker(sourceLine))>")
                 index += 1
                 continue
             }
@@ -308,7 +409,7 @@ private struct MarkdownPreviewHTMLRenderer {
             if let image = image(from: trimmed) {
                 flushParagraph()
                 flushList()
-                html.append("<figure><img src=\"\(escapeHTML(imageSource(image.source)))\" alt=\"\(escapeHTML(image.alt))\"></figure>")
+                html.append("<figure\(marker(sourceLine))><img src=\"\(escapeHTML(imageSource(image.source)))\" alt=\"\(escapeHTML(image.alt))\"></figure>")
                 index += 1
                 continue
             }
@@ -316,7 +417,7 @@ private struct MarkdownPreviewHTMLRenderer {
             if let rawImageHTML = rawImageHTML(from: trimmed) {
                 flushParagraph()
                 flushList()
-                html.append(rawImageHTML)
+                html.append("<div\(marker(sourceLine))>\(rawImageHTML)</div>")
                 index += 1
                 continue
             }
@@ -324,7 +425,7 @@ private struct MarkdownPreviewHTMLRenderer {
             if let table = tableHTML(from: lines, startIndex: index) {
                 flushParagraph()
                 flushList()
-                html.append(table.html)
+                html.append(wrapSourceLine(table.html, line: sourceLine))
                 index = table.nextIndex
                 continue
             }
@@ -332,7 +433,7 @@ private struct MarkdownPreviewHTMLRenderer {
             if let heading = heading(from: trimmed) {
                 flushParagraph()
                 flushList()
-                html.append("<h\(heading.level)>\(inlineHTML(heading.text))</h\(heading.level)>")
+                html.append("<h\(heading.level)\(marker(sourceLine))>\(inlineHTML(heading.text))</h\(heading.level)>")
                 index += 1
                 continue
             }
@@ -341,29 +442,39 @@ private struct MarkdownPreviewHTMLRenderer {
                 flushParagraph()
                 flushList()
                 let quote = String(trimmed.dropFirst()).trimmingCharacters(in: .whitespaces)
-                html.append("<blockquote>\(inlineHTML(quote))</blockquote>")
+                html.append("<blockquote\(marker(sourceLine))>\(inlineHTML(quote))</blockquote>")
                 index += 1
                 continue
             }
 
             if let item = unorderedListItem(from: trimmed) {
                 flushParagraph()
+                if listItems.isEmpty {
+                    listStartLine = sourceLine
+                }
                 listItems.append(item)
                 index += 1
                 continue
             }
 
+            if paragraph.isEmpty {
+                paragraphStartLine = sourceLine
+            }
             paragraph.append(line)
             index += 1
         }
 
         if inCode { flushCode() }
         if inBlockMath {
-            html.append("<p>$$\(escapeHTML(blockMathLines.joined(separator: "\n")))$$</p>")
+            html.append("<p\(marker(blockMathStartLine))>$$\(escapeHTML(blockMathLines.joined(separator: "\n")))$$</p>")
         }
         flushParagraph()
         flushList()
         return html.joined(separator: "\n")
+    }
+
+    private func wrapSourceLine(_ html: String, line: Int) -> String {
+        "<div data-source-line=\"\(line)\">\(html)</div>"
     }
 
     private func inlineHTML(_ markdown: String) -> String {

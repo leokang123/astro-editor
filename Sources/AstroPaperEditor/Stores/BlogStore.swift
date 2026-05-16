@@ -28,6 +28,8 @@ final class BlogStore: ObservableObject {
     private let assetImageCleanupService = AssetImageCleanupService()
     private let maxBuildLogLength = 20_000
     private var editorBodyProvider: (() -> String?)?
+    private var editorTopLineProvider: (() -> Int?)?
+    private(set) var editorTopLine = 1
 
     var blogRoot: URL {
         fileService.blogRoot(for: projectRoot)
@@ -94,6 +96,8 @@ final class BlogStore: ObservableObject {
             projectRoot = url
             currentDocument = nil
             editorBodyProvider = nil
+            editorTopLineProvider = nil
+            editorTopLine = 1
             selectionID = nil
             rescan()
             refreshGitStatus()
@@ -118,6 +122,8 @@ final class BlogStore: ObservableObject {
         guard let id, let node = node(withID: id), node.kind == .document else {
             currentDocument = nil
             editorBodyProvider = nil
+            editorTopLineProvider = nil
+            editorTopLine = 1
             isDirty = false
             return
         }
@@ -125,6 +131,8 @@ final class BlogStore: ObservableObject {
         do {
             currentDocument = try fileService.readDocument(at: node.url, blogRoot: blogRoot)
             editorBodyProvider = nil
+            editorTopLineProvider = nil
+            editorTopLine = 1
             isDirty = false
             statusText = "Opened \(node.relativePath)"
         } catch {
@@ -141,6 +149,14 @@ final class BlogStore: ObservableObject {
 
     func setEditorBodyProvider(_ provider: (() -> String?)?) {
         editorBodyProvider = provider
+    }
+
+    func setEditorTopLineProvider(_ provider: (() -> Int?)?) {
+        editorTopLineProvider = provider
+    }
+
+    func updateEditorTopLine(_ line: Int) {
+        editorTopLine = max(line, 1)
     }
 
     func updateFrontmatter(_ edit: (inout Frontmatter) -> Void) {
@@ -166,6 +182,7 @@ final class BlogStore: ObservableObject {
     func toggleEditorMode() {
         guard canTogglePreview else { return }
         if editorMode == .edit {
+            captureEditorTopLine()
             flushEditorBodyToCurrentDocument()
         }
         editorMode = editorMode == .edit ? .preview : .edit
@@ -589,6 +606,11 @@ final class BlogStore: ObservableObject {
         if currentDocument?.body != body {
             currentDocument?.body = body
         }
+    }
+
+    private func captureEditorTopLine() {
+        guard let line = editorTopLineProvider?() else { return }
+        editorTopLine = max(line, 1)
     }
 
     private func appendCategories(from nodes: [BlogNode], into destinations: inout [CategoryDestination], prefix: String) {

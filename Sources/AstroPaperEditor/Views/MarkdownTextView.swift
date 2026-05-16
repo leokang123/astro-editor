@@ -4,8 +4,10 @@ import SwiftUI
 struct MarkdownTextView: NSViewRepresentable {
     let documentID: String
     let text: String
+    let targetLine: Int
     var onTextChange: () -> Void
     var onRegisterBodyProvider: (((() -> String?)?) -> Void)
+    var onRegisterTopLineProvider: (((() -> Int?)?) -> Void)
     var onInsertImages: ([PastedImage]) -> String
     var onTogglePreview: (() -> Void)?
 
@@ -14,6 +16,7 @@ struct MarkdownTextView: NSViewRepresentable {
             documentID: documentID,
             onTextChange: onTextChange,
             onRegisterBodyProvider: onRegisterBodyProvider,
+            onRegisterTopLineProvider: onRegisterTopLineProvider,
             onInsertImages: onInsertImages,
             onTogglePreview: onTogglePreview
         )
@@ -49,9 +52,12 @@ struct MarkdownTextView: NSViewRepresentable {
         textView.registerForDraggedTypes([.fileURL, .tiff, .png])
 
         scrollView.documentView = textView
+        context.coordinator.scrollView = scrollView
         context.coordinator.textView = textView
         context.coordinator.documentID = documentID
         context.coordinator.registerBodyProvider()
+        context.coordinator.registerTopLineProvider()
+        context.coordinator.restoreSourceLine(targetLine)
         return scrollView
     }
 
@@ -63,35 +69,43 @@ struct MarkdownTextView: NSViewRepresentable {
             textView.setSelectedRange(NSRange(location: min(selectedRange.location, text.count), length: 0))
             context.coordinator.documentID = documentID
             context.coordinator.registerBodyProvider()
+            context.coordinator.registerTopLineProvider()
+            context.coordinator.restoreSourceLine(targetLine)
         }
         context.coordinator.onTextChange = onTextChange
         context.coordinator.onRegisterBodyProvider = onRegisterBodyProvider
+        context.coordinator.onRegisterTopLineProvider = onRegisterTopLineProvider
         context.coordinator.onInsertImages = onInsertImages
         context.coordinator.onTogglePreview = onTogglePreview
     }
 
     static func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {
         coordinator.onRegisterBodyProvider(nil)
+        coordinator.onRegisterTopLineProvider(nil)
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var documentID: String
         var onTextChange: () -> Void
         var onRegisterBodyProvider: (((() -> String?)?) -> Void)
+        var onRegisterTopLineProvider: (((() -> Int?)?) -> Void)
         var onInsertImages: ([PastedImage]) -> String
         var onTogglePreview: (() -> Void)?
+        weak var scrollView: NSScrollView?
         weak var textView: NSTextView?
 
         init(
             documentID: String,
             onTextChange: @escaping () -> Void,
             onRegisterBodyProvider: @escaping (((() -> String?)?) -> Void),
+            onRegisterTopLineProvider: @escaping (((() -> Int?)?) -> Void),
             onInsertImages: @escaping ([PastedImage]) -> String,
             onTogglePreview: (() -> Void)?
         ) {
             self.documentID = documentID
             self.onTextChange = onTextChange
             self.onRegisterBodyProvider = onRegisterBodyProvider
+            self.onRegisterTopLineProvider = onRegisterTopLineProvider
             self.onInsertImages = onInsertImages
             self.onTogglePreview = onTogglePreview
         }
@@ -119,6 +133,59 @@ struct MarkdownTextView: NSViewRepresentable {
                 textView?.string
             }
         }
+
+        func registerTopLineProvider() {
+            onRegisterTopLineProvider { [weak scrollView, weak textView] in
+                guard let scrollView, let textView else { return nil }
+                return textView.sourceLine(at: scrollView.contentView.bounds.origin)
+            }
+        }
+
+        func restoreSourceLine(_ line: Int) {
+            DispatchQueue.main.async { [weak scrollView, weak textView] in
+                guard let scrollView, let textView else { return }
+                let point = textView.pointForSourceLine(line)
+                scrollView.contentView.scroll(to: point)
+                scrollView.reflectScrolledClipView(scrollView.contentView)
+            }
+        }
+    }
+}
+
+private extension NSTextView {
+    func sourceLine(at point: NSPoint) -> Int? {
+        guard let layoutManager, let textContainer else { return nil }
+        let containerPoint = NSPoint(
+            x: point.x - textContainerOrigin.x,
+            y: point.y - textContainerOrigin.y
+        )
+        let glyphIndex = layoutManager.glyphIndex(for: containerPoint, in: textContainer)
+        let characterIndex = layoutManager.characterIndexForGlyph(at: glyphIndex)
+        let prefix = (string as NSString).substring(to: min(characterIndex, string.count))
+        return prefix.reduce(1) { count, character in
+            character == "\n" ? count + 1 : count
+        }
+    }
+
+    func pointForSourceLine(_ line: Int) -> NSPoint {
+        guard let layoutManager else { return .zero }
+        let targetLine = max(line, 1)
+        var currentLine = 1
+        var characterIndex = 0
+
+        for character in string {
+            if currentLine >= targetLine {
+                break
+            }
+            characterIndex += 1
+            if character == "\n" {
+                currentLine += 1
+            }
+        }
+
+        let glyphIndex = layoutManager.glyphIndexForCharacter(at: min(characterIndex, string.count))
+        let rect = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil)
+        return NSPoint(x: 0, y: max(rect.minY + textContainerOrigin.y, 0))
     }
 }
 
