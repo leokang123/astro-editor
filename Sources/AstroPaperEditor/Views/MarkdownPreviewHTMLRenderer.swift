@@ -65,6 +65,9 @@ struct MarkdownPreviewHTMLRenderer {
             h3 { font-size: 1.25rem; }
             p { margin: 0 0 1em; }
             a { color: LinkText; }
+            .source-line-anchor {
+              scroll-margin-top: 0;
+            }
             blockquote {
               border-left: 3px solid var(--rule);
               color: var(--muted);
@@ -191,7 +194,7 @@ struct MarkdownPreviewHTMLRenderer {
 
         func flushParagraph() {
             guard !paragraph.isEmpty else { return }
-            html.append("<p\(marker(paragraphStartLine))>\(inlineHTML(paragraph.joined(separator: "\n")))</p>")
+            html.append("<p\(marker(paragraphStartLine))>\(paragraphHTML(paragraph, startLine: paragraphStartLine))</p>")
             paragraph.removeAll()
         }
 
@@ -293,6 +296,14 @@ struct MarkdownPreviewHTMLRenderer {
                 continue
             }
 
+            if let rawHTML = rawHTMLLine(from: trimmed) {
+                flushParagraph()
+                flushList()
+                html.append(wrapSourceLine(rawHTML, line: sourceLine))
+                index += 1
+                continue
+            }
+
             if let table = tableHTML(from: lines, startIndex: index) {
                 flushParagraph()
                 flushList()
@@ -357,6 +368,15 @@ struct MarkdownPreviewHTMLRenderer {
         return html.replacingOccurrences(of: "\n", with: "<br>")
     }
 
+    private func paragraphHTML(_ lines: [String], startLine: Int) -> String {
+        lines.enumerated()
+            .map { offset, line in
+                let sourceLine = startLine + offset
+                return "<span class=\"source-line-anchor\" data-source-line=\"\(sourceLine)\">\(inlineHTML(line))</span>"
+            }
+            .joined(separator: "<br>")
+    }
+
     private func replacePattern(_ regex: NSRegularExpression, in text: String, with template: String) -> String {
         let range = NSRange(text.startIndex..<text.endIndex, in: text)
         return regex.stringByReplacingMatches(in: text, range: range, withTemplate: template)
@@ -409,6 +429,30 @@ struct MarkdownPreviewHTMLRenderer {
             }
         }
         return rewritten
+    }
+
+    private func rawHTMLLine(from line: String) -> String? {
+        guard let tag = rawHTMLTag(from: line),
+              Self.allowedRawHTMLTags.contains(tag),
+              !containsBlockedRawHTML(in: line) else {
+            return nil
+        }
+        return line
+    }
+
+    private func rawHTMLTag(from line: String) -> String? {
+        let range = NSRange(line.startIndex..<line.endIndex, in: line)
+        guard let match = Self.rawHTMLTagRegex.firstMatch(in: line, range: range),
+              let tagRange = Range(match.range(at: 1), in: line) else {
+            return nil
+        }
+        return String(line[tagRange]).lowercased()
+    }
+
+    private func containsBlockedRawHTML(in line: String) -> Bool {
+        let range = NSRange(line.startIndex..<line.endIndex, in: line)
+        return Self.blockedRawHTMLRegex.firstMatch(in: line, range: range) != nil
+            || Self.eventHandlerAttributeRegex.firstMatch(in: line, range: range) != nil
     }
 
     private func tableHTML(from lines: [String], startIndex: Int) -> (html: String, nextIndex: Int)? {
@@ -529,4 +573,38 @@ struct MarkdownPreviewHTMLRenderer {
     private static let strongRegex = try! NSRegularExpression(pattern: #"\*\*([^*]+)\*\*"#)
     private static let emphasisRegex = try! NSRegularExpression(pattern: #"(?<!\*)\*([^*]+)\*(?!\*)"#)
     private static let linkRegex = try! NSRegularExpression(pattern: #"\[([^\]]+)\]\(([^)]+)\)"#)
+    private static let rawHTMLTagRegex = try! NSRegularExpression(pattern: #"^</?([A-Za-z][A-Za-z0-9-]*)\b"#)
+    private static let blockedRawHTMLRegex = try! NSRegularExpression(
+        pattern: #"<\s*(script|iframe|object|embed|form|input|button|style)\b|javascript:"#,
+        options: [.caseInsensitive]
+    )
+    private static let eventHandlerAttributeRegex = try! NSRegularExpression(
+        pattern: #"\son[A-Za-z]+\s*="#,
+        options: [.caseInsensitive]
+    )
+    private static let allowedRawHTMLTags: Set<String> = [
+        "a",
+        "abbr",
+        "b",
+        "br",
+        "center",
+        "cite",
+        "code",
+        "del",
+        "div",
+        "em",
+        "figcaption",
+        "figure",
+        "i",
+        "ins",
+        "kbd",
+        "mark",
+        "p",
+        "small",
+        "span",
+        "strong",
+        "sub",
+        "sup",
+        "u"
+    ]
 }

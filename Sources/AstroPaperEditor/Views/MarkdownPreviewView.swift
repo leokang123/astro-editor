@@ -137,7 +137,9 @@ struct MarkdownPreviewView: NSViewRepresentable {
                     bestLine = line;
                   }
                 }
-                best.scrollIntoView({ block: "start" });
+                const rect = best.getBoundingClientRect();
+                const top = Math.max(rect.top + window.scrollY, 0);
+                window.scrollTo({ top });
               };
               Promise.resolve(window.previewEnhancementsReady)
                 .catch(() => {})

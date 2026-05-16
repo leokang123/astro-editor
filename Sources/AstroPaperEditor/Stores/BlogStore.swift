@@ -28,6 +28,8 @@ final class BlogStore: ObservableObject {
     private let maxBuildLogLength = 20_000
     private let editorSession = EditorSession()
     private var scanTask: Task<Void, Never>?
+    private var savedDocumentSnapshot: BlogDocument?
+    private var bodyDirtyRecomputeTask: Task<Void, Never>?
 
     var editorTopLine: Int {
         editorSession.topLine
@@ -150,6 +152,7 @@ final class BlogStore: ObservableObject {
         if !isDirty {
             isDirty = true
         }
+        scheduleBodyDirtyRecompute()
     }
 
     func setEditorBodyProvider(_ provider: (() -> String?)?) {
@@ -165,9 +168,12 @@ final class BlogStore: ObservableObject {
     }
 
     func updateFrontmatter(_ edit: (inout Frontmatter) -> Void) {
-        guard currentDocument != nil else { return }
-        edit(&currentDocument!.frontmatter)
-        isDirty = true
+        guard var document = currentDocument else { return }
+        let originalFrontmatter = document.frontmatter
+        edit(&document.frontmatter)
+        guard document.frontmatter != originalFrontmatter else { return }
+        currentDocument = document
+        recomputeDirtyState()
     }
 
     func saveCurrentDocument() {
@@ -177,6 +183,8 @@ final class BlogStore: ObservableObject {
         do {
             try fileService.writeDocument(document)
             currentDocument = document
+            savedDocumentSnapshot = document
+            cancelBodyDirtyRecompute()
             isDirty = false
             statusText = "Saved \(document.relativePath)"
         } catch {
@@ -319,7 +327,7 @@ final class BlogStore: ObservableObject {
             let saved = try imageService.save(images: images, inProjectRoot: projectRoot)
             if currentDocument?.frontmatter.ogImage == nil, let firstAssetPath = saved.assetPaths.first {
                 currentDocument?.frontmatter.ogImage = firstAssetPath
-                isDirty = true
+                recomputeDirtyState()
             }
             return saved.markdown
         } catch {
@@ -338,7 +346,7 @@ final class BlogStore: ObservableObject {
                 suggestedName: "\(title)-og"
             )
             currentDocument = document
-            isDirty = true
+            recomputeDirtyState()
         } catch {
             message = AppMessage(text: error.localizedDescription)
         }
@@ -348,7 +356,7 @@ final class BlogStore: ObservableObject {
         guard var document = currentDocument, document.frontmatter.ogImage != nil else { return }
         document.frontmatter.ogImage = nil
         currentDocument = document
-        isDirty = true
+        recomputeDirtyState()
     }
 
     func resolvedAssetImageURL(_ assetPath: String?) -> URL? {
@@ -525,6 +533,7 @@ final class BlogStore: ObservableObject {
     }
 
     func confirmTermination() -> NSApplication.TerminateReply {
+        recomputeDirtyState()
         guard isDirty else { return .terminateNow }
         let alert = unsavedChangesAlert()
         let response = alert.runModal()
@@ -541,6 +550,7 @@ final class BlogStore: ObservableObject {
     }
 
     private func confirmDiscardOrSaveChanges() -> Bool {
+        recomputeDirtyState()
         guard isDirty else { return true }
         let response = unsavedChangesAlert().runModal()
         switch response {
@@ -587,7 +597,10 @@ final class BlogStore: ObservableObject {
     }
 
     private func openDocument(at url: URL, relativePath: String) throws {
-        currentDocument = try fileService.readDocument(at: url, blogRoot: blogRoot)
+        let document = try fileService.readDocument(at: url, blogRoot: blogRoot)
+        currentDocument = document
+        savedDocumentSnapshot = document
+        cancelBodyDirtyRecompute()
         resetEditorSession()
         isDirty = false
         statusText = "Opened \(relativePath)"
@@ -595,6 +608,8 @@ final class BlogStore: ObservableObject {
 
     private func closeCurrentDocument() {
         currentDocument = nil
+        savedDocumentSnapshot = nil
+        cancelBodyDirtyRecompute()
         resetEditorSession()
         isDirty = false
     }
@@ -606,6 +621,8 @@ final class BlogStore: ObservableObject {
     private func discardEditorChanges(markClean: Bool) {
         editorSession.discardBodyProvider()
         if markClean {
+            currentDocument = savedDocumentSnapshot
+            cancelBodyDirtyRecompute()
             isDirty = false
         }
     }
@@ -619,13 +636,46 @@ final class BlogStore: ObservableObject {
         guard kind == .document, currentDocument?.fileURL == oldURL else { return }
         currentDocument?.fileURL = newURL
         currentDocument?.relativePath = relativePath
+        savedDocumentSnapshot?.fileURL = newURL
+        savedDocumentSnapshot?.relativePath = relativePath
     }
 
     private func flushEditorBodyToCurrentDocument() {
         guard let body = editorSession.currentBody() else { return }
         if currentDocument?.body != body {
             currentDocument?.body = body
+            recomputeDirtyState()
         }
+    }
+
+    private func recomputeDirtyState() {
+        guard let savedDocumentSnapshot else {
+            isDirty = currentDocument != nil
+            return
+        }
+        isDirty = comparableCurrentDocument() != savedDocumentSnapshot
+    }
+
+    private func scheduleBodyDirtyRecompute() {
+        bodyDirtyRecomputeTask?.cancel()
+        bodyDirtyRecomputeTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard !Task.isCancelled else { return }
+            self?.recomputeDirtyState()
+        }
+    }
+
+    private func cancelBodyDirtyRecompute() {
+        bodyDirtyRecomputeTask?.cancel()
+        bodyDirtyRecomputeTask = nil
+    }
+
+    private func comparableCurrentDocument() -> BlogDocument? {
+        guard var document = currentDocument else { return nil }
+        if let body = editorSession.currentBody() {
+            document.body = body
+        }
+        return document
     }
 
     private func captureEditorTopLine() {
