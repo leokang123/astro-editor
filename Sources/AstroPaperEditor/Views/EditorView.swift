@@ -36,12 +36,24 @@ struct EditorView: View {
                     .padding(.vertical, 10)
                     .background(.bar)
 
-                    switch editorMode {
-                    case .edit:
+                    ZStack {
+                        MarkdownPreviewView(
+                            document: document,
+                            projectRoot: projectRoot,
+                            sourceLine: editorTopLine,
+                            onSourceLineChange: { line in
+                                onSourceLineChange(line)
+                            }
+                        )
+                        .opacity(editorMode == .preview ? 1 : 0)
+                        .allowsHitTesting(editorMode == .preview)
+                        .accessibilityHidden(editorMode != .preview)
+
                         MarkdownTextView(
                             documentID: document.fileURL.path,
                             text: document.body,
                             targetLine: editorTopLine,
+                            isActive: editorMode == .edit,
                             onTextChange: {
                                 onTextChange()
                             },
@@ -56,15 +68,9 @@ struct EditorView: View {
                             },
                             onTogglePreview: onTogglePreview
                         )
-                    case .preview:
-                        MarkdownPreviewView(
-                            document: document,
-                            projectRoot: projectRoot,
-                            sourceLine: editorTopLine,
-                            onSourceLineChange: { line in
-                                onSourceLineChange(line)
-                            }
-                        )
+                        .opacity(editorMode == .edit ? 1 : 0)
+                        .allowsHitTesting(editorMode == .edit)
+                        .accessibilityHidden(editorMode != .edit)
                     }
                 }
             } else {

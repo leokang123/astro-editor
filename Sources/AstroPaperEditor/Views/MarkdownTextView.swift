@@ -5,6 +5,7 @@ struct MarkdownTextView: NSViewRepresentable {
     let documentID: String
     let text: String
     let targetLine: Int
+    let isActive: Bool
     var onTextChange: () -> Void
     var onRegisterBodyProvider: (((() -> String?)?) -> Void)
     var onRegisterTopLineProvider: (((() -> Int?)?) -> Void)
@@ -41,6 +42,8 @@ struct MarkdownTextView: NSViewRepresentable {
         textView.font = .monospacedSystemFont(ofSize: 14, weight: .regular)
         textView.isRichText = false
         textView.allowsUndo = true
+        textView.isEditable = isActive
+        textView.isSelectable = isActive
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.isAutomaticTextReplacementEnabled = false
@@ -66,6 +69,12 @@ struct MarkdownTextView: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         guard let textView = nsView.documentView as? NSTextView else { return }
+        textView.isEditable = isActive
+        textView.isSelectable = isActive
+        if !isActive, textView.window?.firstResponder === textView {
+            textView.window?.makeFirstResponder(nil)
+        }
+
         if context.coordinator.documentID != documentID {
             let selectedRange = textView.selectedRange()
             textView.string = text
@@ -85,6 +94,14 @@ struct MarkdownTextView: NSViewRepresentable {
     static func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {
         coordinator.onRegisterBodyProvider(nil)
         coordinator.onRegisterTopLineProvider(nil)
+        guard let textView = nsView.documentView as? PasteAwareTextView else { return }
+        if textView.window?.firstResponder === textView {
+            textView.window?.makeFirstResponder(nil)
+        }
+        textView.undoManager?.removeAllActions(withTarget: textView)
+        textView.delegate = nil
+        textView.pasteCoordinator = nil
+        nsView.documentView = nil
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
