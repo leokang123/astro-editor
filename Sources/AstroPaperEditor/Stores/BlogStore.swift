@@ -26,9 +26,11 @@ final class BlogStore: ObservableObject {
     private let sitePageService = SitePageService()
     private let siteSettingsService = SiteSettingsService()
     private let maxBuildLogLength = 20_000
-    private var editorBodyProvider: (() -> String?)?
-    private var editorTopLineProvider: (() -> Int?)?
-    private(set) var editorTopLine = 1
+    private let editorSession = EditorSession()
+
+    var editorTopLine: Int {
+        editorSession.topLine
+    }
 
     var blogRoot: URL {
         fileService.blogRoot(for: projectRoot)
@@ -135,15 +137,15 @@ final class BlogStore: ObservableObject {
     }
 
     func setEditorBodyProvider(_ provider: (() -> String?)?) {
-        editorBodyProvider = provider
+        editorSession.setBodyProvider(provider)
     }
 
     func setEditorTopLineProvider(_ provider: (() -> Int?)?) {
-        editorTopLineProvider = provider
+        editorSession.setTopLineProvider(provider)
     }
 
     func updateEditorTopLine(_ line: Int) {
-        editorTopLine = max(line, 1)
+        editorSession.updateTopLine(line)
     }
 
     func updateFrontmatter(_ edit: (inout Frontmatter) -> Void) {
@@ -577,13 +579,11 @@ final class BlogStore: ObservableObject {
     }
 
     private func resetEditorSession() {
-        editorBodyProvider = nil
-        editorTopLineProvider = nil
-        editorTopLine = 1
+        editorSession.reset()
     }
 
     private func discardEditorChanges(markClean: Bool) {
-        editorBodyProvider = nil
+        editorSession.discardBodyProvider()
         if markClean {
             isDirty = false
         }
@@ -601,15 +601,14 @@ final class BlogStore: ObservableObject {
     }
 
     private func flushEditorBodyToCurrentDocument() {
-        guard let body = editorBodyProvider?() else { return }
+        guard let body = editorSession.currentBody() else { return }
         if currentDocument?.body != body {
             currentDocument?.body = body
         }
     }
 
     private func captureEditorTopLine() {
-        guard let line = editorTopLineProvider?() else { return }
-        editorTopLine = max(line, 1)
+        editorSession.captureTopLine()
     }
 
     private func appendCategories(from nodes: [BlogNode], into destinations: inout [CategoryDestination]) {
