@@ -27,7 +27,6 @@ final class BlogStore: ObservableObject {
     private let gitService = GitService()
     private let sitePageService = SitePageService()
     private let siteSettingsService = SiteSettingsService()
-    private let assetImageCleanupService = AssetImageCleanupService()
     private let maxBuildLogLength = 20_000
     private var editorBodyProvider: (() -> String?)?
     private var editorTopLineProvider: (() -> Int?)?
@@ -68,9 +67,9 @@ final class BlogStore: ObservableObject {
 
     var categoryDestinations: [CategoryDestination] {
         var destinations = [
-            CategoryDestination(id: BlogNodeID.root, title: "src/data/blog", url: blogRoot, relativePath: "")
+            CategoryDestination(id: BlogNodeID.root, title: "src/data/blog", url: blogRoot)
         ]
-        appendCategories(from: tree, into: &destinations, prefix: "")
+        appendCategories(from: tree, into: &destinations)
         return destinations
     }
 
@@ -635,11 +634,11 @@ final class BlogStore: ObservableObject {
         editorTopLine = max(line, 1)
     }
 
-    private func appendCategories(from nodes: [BlogNode], into destinations: inout [CategoryDestination], prefix: String) {
+    private func appendCategories(from nodes: [BlogNode], into destinations: inout [CategoryDestination]) {
         for node in nodes where node.kind == .category {
             let title = node.relativePath.isEmpty ? node.name : node.relativePath
-            destinations.append(CategoryDestination(id: node.id, title: title, url: node.url, relativePath: node.relativePath))
-            appendCategories(from: node.children, into: &destinations, prefix: node.relativePath)
+            destinations.append(CategoryDestination(id: node.id, title: title, url: node.url))
+            appendCategories(from: node.children, into: &destinations)
         }
     }
 }

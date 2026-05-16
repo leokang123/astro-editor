@@ -17,4 +17,12 @@ extension String {
         .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
         .filter { !$0.isEmpty }
     }
+
+    func trimmingLeadingNewlines() -> String {
+        var text = self
+        while text.hasPrefix("\n") {
+            text.removeFirst()
+        }
+        return text
+    }
 }

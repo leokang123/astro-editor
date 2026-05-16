@@ -162,15 +162,12 @@ struct BlogFileService {
 
 enum BlogFileError: LocalizedError {
     case alreadyExists(String)
-    case missingBlogRoot
     case invalidMove
 
     var errorDescription: String? {
         switch self {
         case .alreadyExists(let name):
             return "'\(name)' already exists."
-        case .missingBlogRoot:
-            return "src/data/blog folder was not found."
         case .invalidMove:
             return "That item cannot be moved there."
         }
@@ -182,26 +179,5 @@ enum BlogNodeID {
 
     static func make(kind: BlogNodeKind, relativePath: String) -> String {
         "\(kind.rawValue):\(relativePath)"
-    }
-
-    static func kind(from id: String) -> BlogNodeKind? {
-        if id.hasPrefix("category:") { return .category }
-        if id.hasPrefix("document:") { return .document }
-        return nil
-    }
-
-    static func relativePath(from id: String) -> String {
-        guard let colon = id.firstIndex(of: ":") else { return id }
-        return String(id[id.index(after: colon)...])
-    }
-}
-
-private extension String {
-    func trimmingLeadingNewlines() -> String {
-        var text = self
-        while text.hasPrefix("\n") {
-            text.removeFirst()
-        }
-        return text
     }
 }

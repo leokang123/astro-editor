@@ -28,6 +28,7 @@ struct MarkdownTextView: NSViewRepresentable {
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
+        scrollView.findBarPosition = .aboveContent
 
         let textView = PasteAwareTextView()
         textView.minSize = NSSize(width: 0, height: 0)
@@ -202,58 +203,45 @@ final class PasteAwareTextView: NSTextView {
     }
 
     override func keyDown(with event: NSEvent) {
-        if isCommandE(event) {
-            pasteCoordinator?.togglePreview()
-            return
-        }
-        if performFindShortcut(event) {
+        if performEditorShortcut(event) {
             return
         }
         super.keyDown(with: event)
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if isCommandE(event) {
+        performEditorShortcut(event) || super.performKeyEquivalent(with: event)
+    }
+
+    private func performEditorShortcut(_ event: NSEvent) -> Bool {
+        let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
+        guard flags.contains(.command),
+              !flags.contains(.option),
+              !flags.contains(.control),
+              let key = event.charactersIgnoringModifiers?.lowercased() else {
+            return false
+        }
+
+        switch (key, flags.contains(.shift)) {
+        case ("e", false):
             pasteCoordinator?.togglePreview()
-            return true
-        }
-        if performFindShortcut(event) {
-            return true
-        }
-        return super.performKeyEquivalent(with: event)
-    }
-
-    private func isCommandE(_ event: NSEvent) -> Bool {
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        return flags == .command && event.charactersIgnoringModifiers?.lowercased() == "e"
-    }
-
-    private func performFindShortcut(_ event: NSEvent) -> Bool {
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        let key = event.charactersIgnoringModifiers?.lowercased()
-
-        if flags == .command, key == "f" {
-            performTextFinderAction(.showFindInterface)
-            return true
+        case ("z", false):
+            undoManager?.undo()
+        case ("z", true):
+            undoManager?.redo()
+        case ("x", false):
+            cut(nil)
+        case ("c", false):
+            copy(nil)
+        case ("v", false):
+            paste(nil)
+        case ("a", false):
+            selectAll(nil)
+        default:
+            return false
         }
 
-        if flags == .command, key == "g" {
-            performTextFinderAction(.nextMatch)
-            return true
-        }
-
-        if flags == [.command, .shift], key == "g" {
-            performTextFinderAction(.previousMatch)
-            return true
-        }
-
-        return false
-    }
-
-    private func performTextFinderAction(_ action: NSTextFinder.Action) {
-        let sender = NSMenuItem()
-        sender.tag = action.rawValue
-        performTextFinderAction(sender)
+        return true
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {

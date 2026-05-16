@@ -1,21 +1,17 @@
 import Foundation
 
-enum BlogNodeKind: String, Codable {
+enum BlogNodeKind: String {
     case category
     case document
 }
 
-struct BlogNode: Identifiable, Hashable {
+struct BlogNode: Identifiable {
     let id: String
     var name: String
     var relativePath: String
     var url: URL
     var kind: BlogNodeKind
     var children: [BlogNode]
-
-    var isDocument: Bool {
-        kind == .document
-    }
 
     var outlineChildren: [BlogNode]? {
         children.isEmpty ? nil : children
@@ -31,9 +27,8 @@ struct BlogNode: Identifiable, Hashable {
     }
 }
 
-struct CategoryDestination: Identifiable, Hashable {
+struct CategoryDestination: Identifiable {
     let id: String
     let title: String
     let url: URL
-    let relativePath: String
 }

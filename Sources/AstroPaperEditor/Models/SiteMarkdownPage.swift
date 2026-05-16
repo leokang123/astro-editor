@@ -31,13 +31,3 @@ struct SiteMarkdownPage {
         return frontmatter + "\n\n" + body.trimmingLeadingNewlines()
     }
 }
-
-private extension String {
-    func trimmingLeadingNewlines() -> String {
-        var text = self
-        while text.hasPrefix("\n") {
-            text.removeFirst()
-        }
-        return text
-    }
-}
