@@ -49,14 +49,29 @@ struct BlogFileService {
         return target
     }
 
-    func createDocument(title: String, description: String, tags: [String], order: String?, under parent: URL) throws -> URL {
+    func createDocument(
+        title: String,
+        description: String,
+        tags: [String],
+        order: String?,
+        featured: Bool?,
+        ogImage: String?,
+        under parent: URL
+    ) throws -> URL {
         let filename = title.astropaperSafePathComponent + ".md"
         let target = parent.appendingPathComponent(filename, isDirectory: false)
         guard !FileManager.default.fileExists(atPath: target.path) else {
             throw BlogFileError.alreadyExists(filename)
         }
 
-        let frontmatter = Frontmatter.new(title: title, description: description, tags: tags, order: order)
+        let frontmatter = Frontmatter.new(
+            title: title,
+            description: description,
+            tags: tags,
+            order: order,
+            featured: featured,
+            ogImage: ogImage
+        )
         let body = "# \(title)\n"
         let document = BlogDocument(
             fileURL: target,

@@ -1,4 +1,6 @@
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct NewDocumentSheet: View {
     @ObservedObject var store: BlogStore
@@ -7,6 +9,8 @@ struct NewDocumentSheet: View {
     @State private var description = ""
     @State private var tags = "일반"
     @State private var order = ""
+    @State private var featured = false
+    @State private var ogImageURL: URL?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -36,6 +40,30 @@ struct NewDocumentSheet: View {
                     .textFieldStyle(.roundedBorder)
             }
 
+            Toggle("Featured", isOn: $featured)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("OG Image")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                HStack {
+                    Text(ogImageURL?.lastPathComponent ?? "Not selected")
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .foregroundStyle(ogImageURL == nil ? .secondary : .primary)
+                    Spacer()
+                    if ogImageURL != nil {
+                        Button("Remove") {
+                            ogImageURL = nil
+                        }
+                    }
+                    Button("Choose Image...") {
+                        chooseOGImage()
+                    }
+                }
+            }
+
             Text("Location: \(locationText)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -50,6 +78,8 @@ struct NewDocumentSheet: View {
                         description: description,
                         tagsText: tags,
                         order: order,
+                        featured: featured,
+                        ogImageSourceURL: ogImageURL,
                         parentID: store.selectionID
                     )
                     activeSheet = nil
@@ -60,6 +90,19 @@ struct NewDocumentSheet: View {
         }
         .padding()
         .frame(width: 460)
+    }
+
+    private func chooseOGImage() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.png, .jpeg, .gif, .tiff, .heic, .webP]
+        panel.message = "Choose an image to copy into src/assets/images and use as ogImage."
+
+        if panel.runModal() == .OK {
+            ogImageURL = panel.url
+        }
     }
 
     private var locationText: String {

@@ -26,6 +26,11 @@ struct PreferencesView: View {
                     Label("Social", systemImage: "link")
                 }
 
+            AssetImagePreferencesView(store: store)
+                .tabItem {
+                    Label("Assets", systemImage: "photo.stack")
+                }
+
             GitPreferencesView(store: store)
                 .tabItem {
                     Label("Git", systemImage: "arrow.up.circle")
@@ -505,6 +510,147 @@ private struct SocialLinksPreferencesView: View {
     }
 }
 
+private struct AssetImagePreferencesView: View {
+    @ObservedObject var store: BlogStore
+    @State private var preview: AssetImageCleanupPreview?
+    @State private var message = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Asset Images")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    Text("Finds files in src/assets/images that are not referenced by project source files.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button {
+                    scan()
+                } label: {
+                    Label("Scan", systemImage: "magnifyingglass")
+                }
+
+                Button {
+                    optimize()
+                } label: {
+                    Label("Optimize", systemImage: "trash")
+                }
+                .disabled(preview?.unusedImages.isEmpty != false)
+            }
+
+            GroupBox("Rule") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("A file is kept when its filename appears in src or public source files.")
+                    Text("Unused files are moved to the macOS Trash, not permanently deleted.")
+                        .foregroundStyle(.secondary)
+                    Text(store.projectRoot.appendingPathComponent("src/assets/images", isDirectory: true).path)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(8)
+            }
+
+            if let preview {
+                GroupBox("Scan Result") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Label("\(preview.allImageCount) total", systemImage: "photo")
+                            Label("\(preview.unusedCount) unused", systemImage: preview.unusedCount == 0 ? "checkmark.circle" : "exclamationmark.triangle")
+                                .foregroundStyle(preview.unusedCount == 0 ? .green : .orange)
+                            Spacer()
+                        }
+
+                        if preview.unusedImages.isEmpty {
+                            VStack(spacing: 8) {
+                                Image(systemName: "checkmark.circle")
+                                    .font(.system(size: 34))
+                                    .foregroundStyle(.green)
+                                Text("No unused images found")
+                                    .font(.headline)
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else {
+                            ScrollView {
+                                LazyVStack(alignment: .leading, spacing: 6) {
+                                    ForEach(preview.unusedImages, id: \.path) { url in
+                                        Label(url.lastPathComponent, systemImage: "photo")
+                                            .lineLimit(1)
+                                            .truncationMode(.middle)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(8)
+                            }
+                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                        }
+                    }
+                    .padding(8)
+                }
+            } else {
+                VStack(spacing: 10) {
+                    Image(systemName: "photo.stack")
+                        .font(.system(size: 34))
+                        .foregroundStyle(.secondary)
+                    Text("No scan yet")
+                        .font(.headline)
+                    Text("Run Scan before optimizing assets/images.")
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+            HStack {
+                Text(message.isEmpty ? store.assetCleanupMessage : message)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer()
+                Button {
+                    NSWorkspace.shared.activateFileViewerSelecting([
+                        store.projectRoot.appendingPathComponent("src/assets/images", isDirectory: true)
+                    ])
+                } label: {
+                    Label("Show in Finder", systemImage: "finder")
+                }
+            }
+            .font(.caption)
+        }
+        .onAppear {
+            if preview == nil, !store.assetCleanupMessage.isEmpty {
+                message = store.assetCleanupMessage
+            }
+        }
+    }
+
+    private func scan() {
+        preview = store.previewUnusedAssetImages()
+        message = store.assetCleanupMessage
+    }
+
+    private func optimize() {
+        guard let preview, !preview.unusedImages.isEmpty else { return }
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Move unused images to Trash?"
+        alert.informativeText = "\(preview.unusedCount) files in src/assets/images are not referenced by source files. They will be moved to the macOS Trash."
+        alert.addButton(withTitle: "Move to Trash")
+        alert.addButton(withTitle: "Cancel")
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        store.moveUnusedAssetImagesToTrash()
+        self.preview = store.previewUnusedAssetImages()
+        message = store.assetCleanupMessage
+    }
+}
+
 private struct AboutPagePreferencesView: View {
     @ObservedObject var store: BlogStore
     @State private var draft = ""
@@ -793,9 +939,9 @@ private struct DeveloperPreferencesView: View {
                 .disabled(store.isBuilding)
 
                 Button {
-                    store.openWebsite()
+                    store.openLocalhost()
                 } label: {
-                    Label("Open Website", systemImage: "safari")
+                    Label("Open Localhost", systemImage: "safari")
                 }
             }
 
@@ -806,6 +952,9 @@ private struct DeveloperPreferencesView: View {
                     Text("docker compose up --build -d")
                         .font(.system(.body, design: .monospaced))
                         .textSelection(.enabled)
+                    Text("Local preview URL: \(BuildService.localPreviewURL.absoluteString)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     Text(store.projectRoot.path)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -829,12 +978,17 @@ private struct DeveloperPreferencesView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView {
-                    Text(store.buildLog)
-                        .font(.system(.caption, design: .monospaced))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Log tail")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    ScrollView {
+                        Text(store.buildLog)
+                            .font(.system(.caption, design: .monospaced))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
+                .padding(10)
                 .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
             }
         }

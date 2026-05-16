@@ -6,10 +6,20 @@ struct Frontmatter: Equatable {
     var pubDatetime: String
     var modDatetime: String
     var description: String
+    var featured: Bool?
+    var ogImage: String?
     var tags: [String]
     var extraLines: [String]
 
-    static func new(title: String, description: String, tags: [String], order: String? = nil, now: Date = Date()) -> Frontmatter {
+    static func new(
+        title: String,
+        description: String,
+        tags: [String],
+        order: String? = nil,
+        featured: Bool? = nil,
+        ogImage: String? = nil,
+        now: Date = Date()
+    ) -> Frontmatter {
         let timestamp = DateFormatting.astropaperTimestamp.string(from: now)
         return Frontmatter(
             title: title,
@@ -17,6 +27,8 @@ struct Frontmatter: Equatable {
             pubDatetime: timestamp,
             modDatetime: timestamp,
             description: description,
+            featured: featured,
+            ogImage: normalizedOptionalScalar(ogImage),
             tags: tags,
             extraLines: []
         )
@@ -32,6 +44,8 @@ struct Frontmatter: Equatable {
                     pubDatetime: DateFormatting.astropaperTimestamp.string(from: Date()),
                     modDatetime: DateFormatting.astropaperTimestamp.string(from: Date()),
                     description: "",
+                    featured: nil,
+                    ogImage: nil,
                     tags: [],
                     extraLines: []
                 ),
@@ -48,6 +62,8 @@ struct Frontmatter: Equatable {
                     pubDatetime: DateFormatting.astropaperTimestamp.string(from: Date()),
                     modDatetime: DateFormatting.astropaperTimestamp.string(from: Date()),
                     description: "",
+                    featured: nil,
+                    ogImage: nil,
                     tags: [],
                     extraLines: []
                 ),
@@ -67,6 +83,8 @@ struct Frontmatter: Equatable {
         var pubDatetime = ""
         var modDatetime = ""
         var description = ""
+        var featured: Bool?
+        var ogImage: String?
         var tags: [String] = []
         var extraLines: [String] = []
         var readingTags = false
@@ -90,6 +108,10 @@ struct Frontmatter: Equatable {
                 modDatetime = Self.scalarValue(from: line)
             } else if line.hasPrefix("description:") {
                 description = Self.scalarValue(from: line)
+            } else if line.hasPrefix("featured:") {
+                featured = Self.boolValue(from: line)
+            } else if line.hasPrefix("ogImage:") {
+                ogImage = Self.normalizedOptionalScalar(Self.scalarValue(from: line))
             } else if line.hasPrefix("tags:") {
                 let parsedInlineTags = Self.inlineTags(from: line)
                 if parsedInlineTags.isEmpty {
@@ -111,6 +133,8 @@ struct Frontmatter: Equatable {
                 pubDatetime: pubDatetime.isEmpty ? now : pubDatetime,
                 modDatetime: modDatetime.isEmpty ? now : modDatetime,
                 description: description,
+                featured: featured,
+                ogImage: ogImage,
                 tags: tags,
                 extraLines: extraLines
             ),
@@ -131,9 +155,18 @@ struct Frontmatter: Equatable {
         lines.append(contentsOf: [
             "pubDatetime: \(pubDatetime)",
             "modDatetime: \(modDatetime)",
-            "description: \"\(Self.escape(description))\"",
-            "tags:"
+            "description: \"\(Self.escape(description))\""
         ])
+
+        if featured == true {
+            lines.append("featured: true")
+        }
+
+        if let ogImage = Self.normalizedOptionalScalar(ogImage) {
+            lines.append("ogImage: \"\(Self.escape(ogImage))\"")
+        }
+
+        lines.append("tags:")
 
         if tags.isEmpty {
             lines.append("  - 일반")
@@ -156,6 +189,18 @@ struct Frontmatter: Equatable {
             return String(raw.dropFirst().dropLast()).replacingOccurrences(of: "\\\"", with: "\"")
         }
         return raw
+    }
+
+    private static func boolValue(from line: String) -> Bool? {
+        let raw = scalarValue(from: line).lowercased()
+        if ["true", "yes", "1"].contains(raw) { return true }
+        if ["false", "no", "0"].contains(raw) { return false }
+        return nil
+    }
+
+    private static func normalizedOptionalScalar(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private static func normalizedOrder(_ value: String?) -> String? {

@@ -15,6 +15,7 @@ final class BlogStore: ObservableObject {
     @Published var gitLog = ""
     @Published var gitStatus = GitRepositoryStatus.unknown
     @Published var isGitOperationRunning = false
+    @Published var assetCleanupMessage = ""
     @Published var message: AppMessage?
     @Published var editorMode: EditorMode = .edit
 
@@ -24,6 +25,8 @@ final class BlogStore: ObservableObject {
     private let gitService = GitService()
     private let sitePageService = SitePageService()
     private let siteSettingsService = SiteSettingsService()
+    private let assetImageCleanupService = AssetImageCleanupService()
+    private let maxBuildLogLength = 20_000
     private var editorBodyProvider: (() -> String?)?
 
     var blogRoot: URL {
@@ -181,15 +184,28 @@ final class BlogStore: ObservableObject {
         }
     }
 
-    func createDocument(title: String, description: String, tagsText: String, order: String?, parentID: String?) {
+    func createDocument(
+        title: String,
+        description: String,
+        tagsText: String,
+        order: String?,
+        featured: Bool,
+        ogImageSourceURL: URL?,
+        parentID: String?
+    ) {
         guard confirmDiscardOrSaveChanges() else { return }
         do {
             let parent = categoryURL(for: parentID)
+            let ogImage = try ogImageSourceURL.map {
+                try imageService.copyToAssets(from: $0, inProjectRoot: projectRoot, suggestedName: "\(title)-og")
+            }
             let url = try fileService.createDocument(
                 title: title,
                 description: description,
                 tags: tagsText.trimmingForTags,
                 order: order,
+                featured: featured ? true : nil,
+                ogImage: ogImage,
                 under: parent
             )
             rescan()
@@ -285,11 +301,52 @@ final class BlogStore: ObservableObject {
     func insertImages(_ images: [PastedImage]) -> String {
         guard currentDocument != nil else { return "" }
         do {
-            return try imageService.save(images: images, inProjectRoot: projectRoot)
+            let saved = try imageService.save(images: images, inProjectRoot: projectRoot)
+            if currentDocument?.frontmatter.ogImage == nil, let firstAssetPath = saved.assetPaths.first {
+                currentDocument?.frontmatter.ogImage = firstAssetPath
+                isDirty = true
+            }
+            return saved.markdown
         } catch {
             message = AppMessage(text: error.localizedDescription)
             return ""
         }
+    }
+
+    func setOGImage(from sourceURL: URL) {
+        guard var document = currentDocument else { return }
+        do {
+            let title = document.frontmatter.title
+            document.frontmatter.ogImage = try imageService.copyToAssets(
+                from: sourceURL,
+                inProjectRoot: projectRoot,
+                suggestedName: "\(title)-og"
+            )
+            currentDocument = document
+            isDirty = true
+        } catch {
+            message = AppMessage(text: error.localizedDescription)
+        }
+    }
+
+    func clearOGImage() {
+        guard var document = currentDocument, document.frontmatter.ogImage != nil else { return }
+        document.frontmatter.ogImage = nil
+        currentDocument = document
+        isDirty = true
+    }
+
+    func resolvedAssetImageURL(_ assetPath: String?) -> URL? {
+        guard let assetPath else { return nil }
+        let trimmed = assetPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix(ImageService.assetImagePrefix) else { return nil }
+        let filename = String(trimmed.dropFirst(ImageService.assetImagePrefix.count))
+        guard !filename.isEmpty else { return nil }
+        return projectRoot
+            .appendingPathComponent("src", isDirectory: true)
+            .appendingPathComponent("assets", isDirectory: true)
+            .appendingPathComponent("images", isDirectory: true)
+            .appendingPathComponent(filename)
     }
 
     func runBuild() {
@@ -297,18 +354,39 @@ final class BlogStore: ObservableObject {
         isBuilding = true
         buildLog = ""
         statusText = "Building with Docker..."
+        var pendingOutput = ""
+        var lastFlush = Date.distantPast
 
         Task {
             do {
                 let status = try await buildService.runDockerCompose(at: projectRoot) { [weak self] text in
-                    self?.buildLog += text
+                    guard let self else { return }
+                    pendingOutput += text
+                    let now = Date()
+                    guard now.timeIntervalSince(lastFlush) > 0.2 || pendingOutput.count > 4_000 else { return }
+                    appendBuildLog(pendingOutput)
+                    pendingOutput = ""
+                    lastFlush = now
+                }
+                if !pendingOutput.isEmpty {
+                    appendBuildLog(pendingOutput)
                 }
                 isBuilding = false
                 statusText = status == 0 ? "Docker build finished" : "Docker build exited with \(status)"
             } catch {
+                if !pendingOutput.isEmpty {
+                    appendBuildLog(pendingOutput)
+                }
                 isBuilding = false
                 message = AppMessage(text: error.localizedDescription)
             }
+        }
+    }
+
+    private func appendBuildLog(_ text: String) {
+        buildLog += text
+        if buildLog.count > maxBuildLogLength {
+            buildLog = "… showing last \(maxBuildLogLength / 1_000)KB of Docker output …\n" + String(buildLog.suffix(maxBuildLogLength))
         }
     }
 
@@ -392,6 +470,34 @@ final class BlogStore: ObservableObject {
             buildService.openURL(url)
             statusText = "Opened \(normalizedWebsite)"
         } catch {
+            message = AppMessage(text: error.localizedDescription)
+        }
+    }
+
+    func openLocalhost() {
+        buildService.openURL(BuildService.localPreviewURL)
+        statusText = "Opened \(BuildService.localPreviewURL.absoluteString)"
+    }
+
+    func previewUnusedAssetImages() -> AssetImageCleanupPreview? {
+        do {
+            let preview = try assetImageCleanupService.preview(projectRoot: projectRoot)
+            assetCleanupMessage = "\(preview.unusedCount) unused of \(preview.allImageCount) images"
+            return preview
+        } catch {
+            assetCleanupMessage = error.localizedDescription
+            message = AppMessage(text: error.localizedDescription)
+            return nil
+        }
+    }
+
+    func moveUnusedAssetImagesToTrash() {
+        do {
+            let result = try assetImageCleanupService.moveUnusedImagesToTrash(projectRoot: projectRoot)
+            assetCleanupMessage = "Moved \(result.trashedImages.count) unused images to Trash"
+            statusText = assetCleanupMessage
+        } catch {
+            assetCleanupMessage = error.localizedDescription
             message = AppMessage(text: error.localizedDescription)
         }
     }
