@@ -46,6 +46,8 @@ struct MarkdownTextView: NSViewRepresentable {
         textView.isAutomaticSpellingCorrectionEnabled = false
         textView.isContinuousSpellCheckingEnabled = false
         textView.isGrammarCheckingEnabled = false
+        textView.usesFindBar = true
+        textView.isIncrementalSearchingEnabled = true
         textView.string = text
         textView.delegate = context.coordinator
         textView.pasteCoordinator = context.coordinator
@@ -204,6 +206,9 @@ final class PasteAwareTextView: NSTextView {
             pasteCoordinator?.togglePreview()
             return
         }
+        if performFindShortcut(event) {
+            return
+        }
         super.keyDown(with: event)
     }
 
@@ -212,12 +217,43 @@ final class PasteAwareTextView: NSTextView {
             pasteCoordinator?.togglePreview()
             return true
         }
+        if performFindShortcut(event) {
+            return true
+        }
         return super.performKeyEquivalent(with: event)
     }
 
     private func isCommandE(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         return flags == .command && event.charactersIgnoringModifiers?.lowercased() == "e"
+    }
+
+    private func performFindShortcut(_ event: NSEvent) -> Bool {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let key = event.charactersIgnoringModifiers?.lowercased()
+
+        if flags == .command, key == "f" {
+            performTextFinderAction(.showFindInterface)
+            return true
+        }
+
+        if flags == .command, key == "g" {
+            performTextFinderAction(.nextMatch)
+            return true
+        }
+
+        if flags == [.command, .shift], key == "g" {
+            performTextFinderAction(.previousMatch)
+            return true
+        }
+
+        return false
+    }
+
+    private func performTextFinderAction(_ action: NSTextFinder.Action) {
+        let sender = NSMenuItem()
+        sender.tag = action.rawValue
+        performTextFinderAction(sender)
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
