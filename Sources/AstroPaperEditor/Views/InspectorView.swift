@@ -5,6 +5,8 @@ import UniformTypeIdentifiers
 struct InspectorView: View {
     let document: BlogDocument?
     var onUpdateFrontmatter: ((inout Frontmatter) -> Void) -> Void
+    var onFrontmatterChange: () -> Void
+    var onRegisterFrontmatterProvider: ((FrontmatterDraftProvider?) -> Void)
     var onSetOGImage: (URL) -> Void
     var onClearOGImage: () -> Void
     var onResolveAssetImageURL: (String?) -> URL?
@@ -22,40 +24,23 @@ struct InspectorView: View {
             if let document {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        InspectorCard {
-                            FieldRow("Title") {
-                                TextField("Title", text: frontmatterBinding(\.title))
-                                    .textFieldStyle(.plain)
-                                    .multilineTextAlignment(.trailing)
+                        FrontmatterDraftEditor(
+                            documentID: document.id,
+                            frontmatter: document.frontmatter,
+                            onDraftChange: onFrontmatterChange,
+                            onRegisterProvider: onRegisterFrontmatterProvider,
+                            onCommit: { draft in
+                                onUpdateFrontmatter {
+                                    $0.title = draft.title
+                                    $0.order = draft.order
+                                    $0.pubDatetime = draft.pubDatetime
+                                    $0.modDatetime = draft.modDatetime
+                                    $0.description = draft.description
+                                    $0.featured = draft.featured
+                                    $0.tags = draft.tags
+                                }
                             }
-                            Divider()
-                            FieldRow("Order") {
-                                TextField("Order", text: orderBinding)
-                                    .textFieldStyle(.plain)
-                                    .multilineTextAlignment(.trailing)
-                            }
-                            Divider()
-                            FieldRow("Description", alignment: .top) {
-                                TextField("Description", text: frontmatterBinding(\.description), axis: .vertical)
-                                    .lineLimit(2...4)
-                                    .textFieldStyle(.plain)
-                                    .multilineTextAlignment(.trailing)
-                            }
-                            Divider()
-                            Toggle("Featured", isOn: featuredBinding)
-                            Divider()
-                            FieldRow("Published") {
-                                TextField("Published", text: frontmatterBinding(\.pubDatetime))
-                                    .textFieldStyle(.plain)
-                                    .multilineTextAlignment(.trailing)
-                            }
-                            Divider()
-                            FieldRow("Modified") {
-                                TextField("Modified", text: frontmatterBinding(\.modDatetime))
-                                    .textFieldStyle(.plain)
-                                    .multilineTextAlignment(.trailing)
-                            }
-                        }
+                        )
 
                         InspectorCard {
                             OGImageInspector(
@@ -63,16 +48,6 @@ struct InspectorView: View {
                                 onSetOGImage: onSetOGImage,
                                 onClearOGImage: onClearOGImage,
                                 onResolveAssetImageURL: onResolveAssetImageURL
-                            )
-                        }
-
-                        InspectorCard {
-                            TagsEditor(
-                                documentID: document.id,
-                                tags: document.frontmatter.tags,
-                                onUpdateTags: { tags in
-                                    onUpdateFrontmatter { $0.tags = tags }
-                                }
                             )
                         }
 
@@ -105,34 +80,6 @@ struct InspectorView: View {
                 Spacer()
             }
         }
-    }
-
-    private func frontmatterBinding(_ keyPath: WritableKeyPath<Frontmatter, String>) -> Binding<String> {
-        Binding(
-            get: { document?.frontmatter[keyPath: keyPath] ?? "" },
-            set: { value in
-                onUpdateFrontmatter { $0[keyPath: keyPath] = value }
-            }
-        )
-    }
-
-    private var orderBinding: Binding<String> {
-        Binding(
-            get: { document?.frontmatter.order ?? "" },
-            set: { value in
-                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-                onUpdateFrontmatter { $0.order = trimmed.isEmpty ? nil : trimmed }
-            }
-        )
-    }
-
-    private var featuredBinding: Binding<Bool> {
-        Binding(
-            get: { document?.frontmatter.featured == true },
-            set: { value in
-                onUpdateFrontmatter { $0.featured = value ? true : nil }
-            }
-        )
     }
 }
 
@@ -171,51 +118,218 @@ private struct FieldRow<Content: View>: View {
     }
 }
 
-private struct TagsEditor: View {
+private struct FrontmatterDraftEditor: View {
     let documentID: String
-    let tags: [String]
-    var onUpdateTags: ([String]) -> Void
-    @State private var draft: String
+    let frontmatter: Frontmatter
+    var onDraftChange: () -> Void
+    var onRegisterProvider: ((FrontmatterDraftProvider?) -> Void)
+    var onCommit: (Frontmatter) -> Void
+    @State private var draft: Frontmatter
+    @State private var tagsDraft: String
+    @FocusState private var focusedField: FrontmatterFocusField?
 
-    init(documentID: String, tags: [String], onUpdateTags: @escaping ([String]) -> Void) {
+    init(
+        documentID: String,
+        frontmatter: Frontmatter,
+        onDraftChange: @escaping () -> Void,
+        onRegisterProvider: @escaping ((FrontmatterDraftProvider?) -> Void),
+        onCommit: @escaping (Frontmatter) -> Void
+    ) {
         self.documentID = documentID
-        self.tags = tags
-        self.onUpdateTags = onUpdateTags
-        _draft = State(initialValue: tags.joined(separator: "\n"))
+        self.frontmatter = frontmatter
+        self.onDraftChange = onDraftChange
+        self.onRegisterProvider = onRegisterProvider
+        self.onCommit = onCommit
+        _draft = State(initialValue: frontmatter)
+        _tagsDraft = State(initialValue: frontmatter.tags.joined(separator: "\n"))
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("Tags")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("comma or line")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-            TextEditor(text: Binding(
-                get: { draft },
-                set: { value in
-                    draft = value
-                    onUpdateTags(value.trimmingForTags)
+        Group {
+            InspectorCard {
+                FieldRow("Title") {
+                    TextField("Title", text: frontmatterBinding(\.title))
+                        .textFieldStyle(.plain)
+                        .multilineTextAlignment(.trailing)
+                        .focused($focusedField, equals: .title)
                 }
-            ))
-            .font(.body)
-            .scrollContentBackground(.hidden)
-            .frame(minHeight: 92)
-            .padding(6)
-            .background(Color(nsColor: .textBackgroundColor).opacity(0.25))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .overlay {
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(.separator, lineWidth: 1)
+                Divider()
+                FieldRow("Order") {
+                    TextField("Order", text: orderBinding)
+                        .textFieldStyle(.plain)
+                        .multilineTextAlignment(.trailing)
+                        .focused($focusedField, equals: .order)
+                }
+                Divider()
+                FieldRow("Description", alignment: .top) {
+                    TextField("Description", text: frontmatterBinding(\.description), axis: .vertical)
+                        .lineLimit(2...4)
+                        .textFieldStyle(.plain)
+                        .multilineTextAlignment(.trailing)
+                        .focused($focusedField, equals: .description)
+                }
+                Divider()
+                Toggle("Featured", isOn: featuredBinding)
+                Divider()
+                FieldRow("Published") {
+                    TextField("Published", text: frontmatterBinding(\.pubDatetime))
+                        .textFieldStyle(.plain)
+                        .multilineTextAlignment(.trailing)
+                        .focused($focusedField, equals: .published)
+                }
+                Divider()
+                FieldRow("Modified") {
+                    TextField("Modified", text: frontmatterBinding(\.modDatetime))
+                        .textFieldStyle(.plain)
+                        .multilineTextAlignment(.trailing)
+                        .focused($focusedField, equals: .modified)
+                }
             }
+
+            InspectorCard {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Tags")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("comma or line")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    TextEditor(text: Binding(
+                        get: { tagsDraft },
+                        set: { value in
+                            guard tagsDraft != value else { return }
+                            tagsDraft = value
+                            handleDraftChange()
+                        }
+                    ))
+                    .font(.body)
+                    .scrollContentBackground(.hidden)
+                    .frame(minHeight: 92)
+                    .padding(6)
+                    .background(Color(nsColor: .textBackgroundColor).opacity(0.25))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(.separator, lineWidth: 1)
+                    }
+                    .focused($focusedField, equals: .tags)
+                }
+            }
+        }
+        .onAppear {
+            registerProvider()
         }
         .onChange(of: documentID) { _ in
-            draft = tags.joined(separator: "\n")
+            resetDraft(to: frontmatter)
+            registerProvider()
         }
+        .onChange(of: frontmatter) { updatedFrontmatter in
+            if focusedField == nil {
+                resetDraft(to: updatedFrontmatter)
+            } else {
+                syncExternalFields(from: updatedFrontmatter)
+            }
+            registerProvider()
+        }
+        .onChange(of: focusedField) { focusedField in
+            if focusedField == nil {
+                commitDraft()
+            }
+        }
+        .onDisappear {
+            onRegisterProvider(nil)
+        }
+    }
+
+    private var currentDraft: Frontmatter {
+        var value = draft
+        value.tags = tagsDraft.trimmingForTags
+        return value
+    }
+
+    private var draftApplier: FrontmatterDraftApplier {
+        let draft = currentDraft
+        return { frontmatter in
+            frontmatter.title = draft.title
+            frontmatter.order = draft.order
+            frontmatter.pubDatetime = draft.pubDatetime
+            frontmatter.modDatetime = draft.modDatetime
+            frontmatter.description = draft.description
+            frontmatter.featured = draft.featured
+            frontmatter.tags = draft.tags
+        }
+    }
+
+    private func frontmatterBinding(_ keyPath: WritableKeyPath<Frontmatter, String>) -> Binding<String> {
+        Binding(
+            get: { draft[keyPath: keyPath] },
+            set: { value in
+                guard draft[keyPath: keyPath] != value else { return }
+                draft[keyPath: keyPath] = value
+                handleDraftChange()
+            }
+        )
+    }
+
+    private var orderBinding: Binding<String> {
+        Binding(
+            get: { draft.order ?? "" },
+            set: { value in
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                let order = trimmed.isEmpty ? nil : trimmed
+                guard draft.order != order else { return }
+                draft.order = order
+                handleDraftChange()
+            }
+        )
+    }
+
+    private var featuredBinding: Binding<Bool> {
+        Binding(
+            get: { draft.featured == true },
+            set: { value in
+                let featured = value ? true : nil
+                guard draft.featured != featured else { return }
+                draft.featured = featured
+                handleDraftChange()
+                commitDraft()
+            }
+        )
+    }
+
+    private func handleDraftChange() {
+        registerProvider()
+        onDraftChange()
+    }
+
+    private func commitDraft() {
+        registerProvider()
+        onCommit(currentDraft)
+    }
+
+    private func resetDraft(to frontmatter: Frontmatter) {
+        draft = frontmatter
+        tagsDraft = frontmatter.tags.joined(separator: "\n")
+    }
+
+    private func syncExternalFields(from frontmatter: Frontmatter) {
+        draft.extraLines = frontmatter.extraLines
+    }
+
+    private func registerProvider() {
+        onRegisterProvider { draftApplier }
+    }
+
+    private enum FrontmatterFocusField: Hashable {
+        case title
+        case order
+        case description
+        case published
+        case modified
+        case tags
     }
 }
 

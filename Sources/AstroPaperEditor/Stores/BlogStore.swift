@@ -161,21 +161,34 @@ final class BlogStore: ObservableObject {
         documentSession.setTopLineProvider(provider)
     }
 
+    func setFrontmatterProvider(_ provider: FrontmatterDraftProvider?) {
+        documentSession.setFrontmatterProvider(provider)
+    }
+
     func updateEditorTopLine(_ line: Int) {
         documentSession.updateTopLine(line)
+    }
+
+    func markFrontmatterChanged() {
+        documentSession.markFrontmatterChanged(
+            currentDocument: { [weak self] in self?.currentDocument },
+            isDirty: isDirty,
+            setDirty: { [weak self] value in self?.isDirty = value }
+        )
     }
 
     func updateFrontmatter(_ edit: (inout Frontmatter) -> Void) {
         guard var document = currentDocument else { return }
         let originalFrontmatter = document.frontmatter
         edit(&document.frontmatter)
-        guard document.frontmatter != originalFrontmatter else { return }
-        currentDocument = document
+        if document.frontmatter != originalFrontmatter {
+            currentDocument = document
+        }
         recomputeDirtyState()
     }
 
     func saveCurrentDocument() {
-        flushEditorBodyToCurrentDocument()
+        flushSessionDraftsToCurrentDocument()
         guard var document = currentDocument else { return }
         document.frontmatter.modDatetime = DateFormatting.astropaperTimestamp.string(from: Date())
         do {
@@ -193,7 +206,7 @@ final class BlogStore: ObservableObject {
         guard canTogglePreview else { return }
         if editorMode == .edit {
             captureEditorTopLine()
-            flushEditorBodyToCurrentDocument()
+            flushSessionDraftsToCurrentDocument()
         }
         editorMode = editorMode == .edit ? .preview : .edit
     }
@@ -626,8 +639,8 @@ final class BlogStore: ObservableObject {
         documentSession.updateSavedDocumentLocation(to: newURL, relativePath: relativePath)
     }
 
-    private func flushEditorBodyToCurrentDocument() {
-        if documentSession.flushEditorBody(to: &currentDocument) {
+    private func flushSessionDraftsToCurrentDocument() {
+        if documentSession.flushDrafts(to: &currentDocument) {
             recomputeDirtyState()
         }
     }

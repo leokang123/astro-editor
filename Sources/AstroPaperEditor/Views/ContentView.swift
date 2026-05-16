@@ -46,6 +46,8 @@ struct ContentView: View {
                     InspectorView(
                         document: store.currentDocument,
                         onUpdateFrontmatter: store.updateFrontmatter,
+                        onFrontmatterChange: store.markFrontmatterChanged,
+                        onRegisterFrontmatterProvider: store.setFrontmatterProvider,
                         onSetOGImage: store.setOGImage,
                         onClearOGImage: store.clearOGImage,
                         onResolveAssetImageURL: store.resolvedAssetImageURL

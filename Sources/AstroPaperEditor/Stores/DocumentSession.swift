@@ -1,10 +1,14 @@
 import Foundation
 
+typealias FrontmatterDraftApplier = (inout Frontmatter) -> Void
+typealias FrontmatterDraftProvider = () -> FrontmatterDraftApplier?
+
 @MainActor
 final class DocumentSession {
     private let editorSession = EditorSession()
     private var savedDocumentSnapshot: BlogDocument?
     private var bodyDirtyRecomputeTask: Task<Void, Never>?
+    private var frontmatterProvider: FrontmatterDraftProvider?
 
     var topLine: Int {
         editorSession.topLine
@@ -18,6 +22,10 @@ final class DocumentSession {
         editorSession.setTopLineProvider(provider)
     }
 
+    func setFrontmatterProvider(_ provider: FrontmatterDraftProvider?) {
+        frontmatterProvider = provider
+    }
+
     func updateTopLine(_ line: Int) {
         editorSession.updateTopLine(line)
     }
@@ -28,19 +36,21 @@ final class DocumentSession {
 
     func open(_ document: BlogDocument) {
         savedDocumentSnapshot = document
-        cancelBodyDirtyRecompute()
+        cancelDirtyRecomputes()
         editorSession.reset()
+        frontmatterProvider = nil
     }
 
     func close() {
         savedDocumentSnapshot = nil
-        cancelBodyDirtyRecompute()
+        cancelDirtyRecomputes()
         editorSession.reset()
+        frontmatterProvider = nil
     }
 
     func markSaved(_ document: BlogDocument) {
         savedDocumentSnapshot = document
-        cancelBodyDirtyRecompute()
+        cancelDirtyRecomputes()
     }
 
     func markBodyChanged(
@@ -55,6 +65,17 @@ final class DocumentSession {
         scheduleBodyDirtyRecompute(currentDocument: currentDocument, setDirty: setDirty)
     }
 
+    func markFrontmatterChanged(
+        currentDocument: @escaping @MainActor () -> BlogDocument?,
+        isDirty: Bool,
+        setDirty: @escaping @MainActor (Bool) -> Void
+    ) {
+        guard currentDocument() != nil else { return }
+        if !isDirty {
+            setDirty(true)
+        }
+    }
+
     func isDirty(currentDocument: BlogDocument?) -> Bool {
         guard let savedDocumentSnapshot else {
             return currentDocument != nil
@@ -65,7 +86,7 @@ final class DocumentSession {
     func discardEditorChanges(markClean: Bool) -> BlogDocument? {
         editorSession.discardBodyProvider()
         guard markClean else { return nil }
-        cancelBodyDirtyRecompute()
+        cancelDirtyRecomputes()
         return savedDocumentSnapshot
     }
 
@@ -75,11 +96,25 @@ final class DocumentSession {
     }
 
     @discardableResult
-    func flushEditorBody(to document: inout BlogDocument?) -> Bool {
-        guard let body = editorSession.currentBody(), document?.body != body else {
+    func flushDrafts(to document: inout BlogDocument?) -> Bool {
+        var didChange = false
+        if let body = editorSession.currentBody(), document?.body != body {
+            document?.body = body
+            didChange = true
+        }
+        return flushFrontmatter(to: &document) || didChange
+    }
+
+    @discardableResult
+    func flushFrontmatter(to document: inout BlogDocument?) -> Bool {
+        guard let applyDraft = frontmatterProvider?(),
+              var frontmatter = document?.frontmatter else {
             return false
         }
-        document?.body = body
+        let originalFrontmatter = frontmatter
+        applyDraft(&frontmatter)
+        guard frontmatter != originalFrontmatter else { return false }
+        document?.frontmatter = frontmatter
         return true
     }
 
@@ -89,7 +124,7 @@ final class DocumentSession {
     ) {
         bodyDirtyRecomputeTask?.cancel()
         bodyDirtyRecomputeTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 500_000_000)
+            try? await Task.sleep(nanoseconds: DebounceTiming.documentEditNanoseconds)
             guard !Task.isCancelled, let self else { return }
             setDirty(self.isDirty(currentDocument: currentDocument()))
         }
@@ -100,10 +135,17 @@ final class DocumentSession {
         bodyDirtyRecomputeTask = nil
     }
 
+    private func cancelDirtyRecomputes() {
+        cancelBodyDirtyRecompute()
+    }
+
     private func comparableDocument(_ document: BlogDocument?) -> BlogDocument? {
         guard var document else { return nil }
         if let body = editorSession.currentBody() {
             document.body = body
+        }
+        if let applyDraft = frontmatterProvider?() {
+            applyDraft(&document.frontmatter)
         }
         return document
     }
