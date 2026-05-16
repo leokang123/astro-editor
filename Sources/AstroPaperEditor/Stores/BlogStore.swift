@@ -93,10 +93,7 @@ final class BlogStore: ObservableObject {
 
         if confirmDiscardOrSaveChanges() {
             projectRoot = url
-            currentDocument = nil
-            editorBodyProvider = nil
-            editorTopLineProvider = nil
-            editorTopLine = 1
+            closeCurrentDocument()
             selectionID = nil
             rescan()
             refreshGitStatus()
@@ -119,21 +116,12 @@ final class BlogStore: ObservableObject {
         selectionID = id
 
         guard let id, let node = node(withID: id), node.kind == .document else {
-            currentDocument = nil
-            editorBodyProvider = nil
-            editorTopLineProvider = nil
-            editorTopLine = 1
-            isDirty = false
+            closeCurrentDocument()
             return
         }
 
         do {
-            currentDocument = try fileService.readDocument(at: node.url, blogRoot: blogRoot)
-            editorBodyProvider = nil
-            editorTopLineProvider = nil
-            editorTopLine = 1
-            isDirty = false
-            statusText = "Opened \(node.relativePath)"
+            try openDocument(node)
         } catch {
             message = AppMessage(text: error.localizedDescription)
         }
@@ -252,10 +240,7 @@ final class BlogStore: ObservableObject {
             rescan()
             let relativePath = BlogFileService.relativePath(from: blogRoot, to: newURL)
             selectionID = BlogNodeID.make(kind: node.kind, relativePath: relativePath)
-            if node.kind == .document, currentDocument?.fileURL == node.url {
-                currentDocument?.fileURL = newURL
-                currentDocument?.relativePath = relativePath
-            }
+            updateCurrentDocumentLocation(matching: node.url, to: newURL, relativePath: relativePath, kind: node.kind)
         } catch {
             message = AppMessage(text: error.localizedDescription)
         }
@@ -280,10 +265,7 @@ final class BlogStore: ObservableObject {
             rescan()
             let relativePath = BlogFileService.relativePath(from: blogRoot, to: newURL)
             selectionID = BlogNodeID.make(kind: node.kind, relativePath: relativePath)
-            if node.kind == .document, currentDocument?.fileURL == node.url {
-                currentDocument?.fileURL = newURL
-                currentDocument?.relativePath = relativePath
-            }
+            updateCurrentDocumentLocation(matching: node.url, to: newURL, relativePath: relativePath, kind: node.kind)
         } catch {
             message = AppMessage(text: error.localizedDescription)
         }
@@ -303,9 +285,7 @@ final class BlogStore: ObservableObject {
         do {
             try fileService.trash(node: node)
             if currentDocument?.fileURL == node.url {
-                currentDocument = nil
-                editorBodyProvider = nil
-                isDirty = false
+                closeCurrentDocument()
             }
             selectionID = nil
             rescan()
@@ -534,7 +514,7 @@ final class BlogStore: ObservableObject {
             saveCurrentDocument()
             return isDirty ? .terminateCancel : .terminateNow
         case .alertSecondButtonReturn:
-            editorBodyProvider = nil
+            discardEditorChanges(markClean: false)
             return .terminateNow
         default:
             return .terminateCancel
@@ -549,8 +529,7 @@ final class BlogStore: ObservableObject {
             saveCurrentDocument()
             return !isDirty
         case .alertSecondButtonReturn:
-            editorBodyProvider = nil
-            isDirty = false
+            discardEditorChanges(markClean: true)
             return true
         default:
             return false
@@ -582,6 +561,43 @@ final class BlogStore: ObservableObject {
 
     private func node(withID id: String) -> BlogNode? {
         tree.firstNode { $0.id == id }
+    }
+
+    private func openDocument(_ node: BlogNode) throws {
+        currentDocument = try fileService.readDocument(at: node.url, blogRoot: blogRoot)
+        resetEditorSession()
+        isDirty = false
+        statusText = "Opened \(node.relativePath)"
+    }
+
+    private func closeCurrentDocument() {
+        currentDocument = nil
+        resetEditorSession()
+        isDirty = false
+    }
+
+    private func resetEditorSession() {
+        editorBodyProvider = nil
+        editorTopLineProvider = nil
+        editorTopLine = 1
+    }
+
+    private func discardEditorChanges(markClean: Bool) {
+        editorBodyProvider = nil
+        if markClean {
+            isDirty = false
+        }
+    }
+
+    private func updateCurrentDocumentLocation(
+        matching oldURL: URL,
+        to newURL: URL,
+        relativePath: String,
+        kind: BlogNodeKind
+    ) {
+        guard kind == .document, currentDocument?.fileURL == oldURL else { return }
+        currentDocument?.fileURL = newURL
+        currentDocument?.relativePath = relativePath
     }
 
     private func flushEditorBodyToCurrentDocument() {
