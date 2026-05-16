@@ -61,6 +61,7 @@ struct MarkdownTextView: NSViewRepresentable {
         context.coordinator.scrollView = scrollView
         context.coordinator.textView = textView
         context.coordinator.documentID = documentID
+        context.coordinator.isActive = isActive
         context.coordinator.registerBodyProvider()
         context.coordinator.registerTopLineProvider()
         context.coordinator.restoreSourceLine(targetLine)
@@ -80,10 +81,14 @@ struct MarkdownTextView: NSViewRepresentable {
             textView.string = text
             textView.setSelectedRange(NSRange(location: min(selectedRange.location, text.count), length: 0))
             context.coordinator.documentID = documentID
+            context.coordinator.isActive = isActive
             context.coordinator.registerBodyProvider()
             context.coordinator.registerTopLineProvider()
             context.coordinator.restoreSourceLine(targetLine)
+        } else if !context.coordinator.isActive && isActive {
+            context.coordinator.restoreSourceLine(targetLine)
         }
+        context.coordinator.isActive = isActive
         context.coordinator.onTextChange = onTextChange
         context.coordinator.onRegisterBodyProvider = onRegisterBodyProvider
         context.coordinator.onRegisterTopLineProvider = onRegisterTopLineProvider
@@ -111,6 +116,7 @@ struct MarkdownTextView: NSViewRepresentable {
         var onRegisterTopLineProvider: (((() -> Int?)?) -> Void)
         var onInsertImages: ([PastedImage]) -> String
         var onTogglePreview: (() -> Void)?
+        var isActive = true
         weak var scrollView: NSScrollView?
         weak var textView: NSTextView?
 
