@@ -26,13 +26,11 @@ final class BlogStore: ObservableObject {
     private let sitePageService = SitePageService()
     private let siteSettingsService = SiteSettingsService()
     private let maxBuildLogLength = 20_000
-    private let editorSession = EditorSession()
+    private let documentSession = DocumentSession()
     private var scanTask: Task<Void, Never>?
-    private var savedDocumentSnapshot: BlogDocument?
-    private var bodyDirtyRecomputeTask: Task<Void, Never>?
 
     var editorTopLine: Int {
-        editorSession.topLine
+        documentSession.topLine
     }
 
     var blogRoot: URL {
@@ -148,23 +146,23 @@ final class BlogStore: ObservableObject {
     }
 
     func markBodyChanged() {
-        guard currentDocument != nil else { return }
-        if !isDirty {
-            isDirty = true
-        }
-        scheduleBodyDirtyRecompute()
+        documentSession.markBodyChanged(
+            currentDocument: { [weak self] in self?.currentDocument },
+            isDirty: isDirty,
+            setDirty: { [weak self] value in self?.isDirty = value }
+        )
     }
 
     func setEditorBodyProvider(_ provider: (() -> String?)?) {
-        editorSession.setBodyProvider(provider)
+        documentSession.setBodyProvider(provider)
     }
 
     func setEditorTopLineProvider(_ provider: (() -> Int?)?) {
-        editorSession.setTopLineProvider(provider)
+        documentSession.setTopLineProvider(provider)
     }
 
     func updateEditorTopLine(_ line: Int) {
-        editorSession.updateTopLine(line)
+        documentSession.updateTopLine(line)
     }
 
     func updateFrontmatter(_ edit: (inout Frontmatter) -> Void) {
@@ -183,8 +181,7 @@ final class BlogStore: ObservableObject {
         do {
             try fileService.writeDocument(document)
             currentDocument = document
-            savedDocumentSnapshot = document
-            cancelBodyDirtyRecompute()
+            documentSession.markSaved(document)
             isDirty = false
             statusText = "Saved \(document.relativePath)"
         } catch {
@@ -599,30 +596,20 @@ final class BlogStore: ObservableObject {
     private func openDocument(at url: URL, relativePath: String) throws {
         let document = try fileService.readDocument(at: url, blogRoot: blogRoot)
         currentDocument = document
-        savedDocumentSnapshot = document
-        cancelBodyDirtyRecompute()
-        resetEditorSession()
+        documentSession.open(document)
         isDirty = false
         statusText = "Opened \(relativePath)"
     }
 
     private func closeCurrentDocument() {
         currentDocument = nil
-        savedDocumentSnapshot = nil
-        cancelBodyDirtyRecompute()
-        resetEditorSession()
+        documentSession.close()
         isDirty = false
     }
 
-    private func resetEditorSession() {
-        editorSession.reset()
-    }
-
     private func discardEditorChanges(markClean: Bool) {
-        editorSession.discardBodyProvider()
-        if markClean {
-            currentDocument = savedDocumentSnapshot
-            cancelBodyDirtyRecompute()
+        if let restoredDocument = documentSession.discardEditorChanges(markClean: markClean) {
+            currentDocument = restoredDocument
             isDirty = false
         }
     }
@@ -636,50 +623,21 @@ final class BlogStore: ObservableObject {
         guard kind == .document, currentDocument?.fileURL == oldURL else { return }
         currentDocument?.fileURL = newURL
         currentDocument?.relativePath = relativePath
-        savedDocumentSnapshot?.fileURL = newURL
-        savedDocumentSnapshot?.relativePath = relativePath
+        documentSession.updateSavedDocumentLocation(to: newURL, relativePath: relativePath)
     }
 
     private func flushEditorBodyToCurrentDocument() {
-        guard let body = editorSession.currentBody() else { return }
-        if currentDocument?.body != body {
-            currentDocument?.body = body
+        if documentSession.flushEditorBody(to: &currentDocument) {
             recomputeDirtyState()
         }
     }
 
     private func recomputeDirtyState() {
-        guard let savedDocumentSnapshot else {
-            isDirty = currentDocument != nil
-            return
-        }
-        isDirty = comparableCurrentDocument() != savedDocumentSnapshot
-    }
-
-    private func scheduleBodyDirtyRecompute() {
-        bodyDirtyRecomputeTask?.cancel()
-        bodyDirtyRecomputeTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            guard !Task.isCancelled else { return }
-            self?.recomputeDirtyState()
-        }
-    }
-
-    private func cancelBodyDirtyRecompute() {
-        bodyDirtyRecomputeTask?.cancel()
-        bodyDirtyRecomputeTask = nil
-    }
-
-    private func comparableCurrentDocument() -> BlogDocument? {
-        guard var document = currentDocument else { return nil }
-        if let body = editorSession.currentBody() {
-            document.body = body
-        }
-        return document
+        isDirty = documentSession.isDirty(currentDocument: currentDocument)
     }
 
     private func captureEditorTopLine() {
-        editorSession.captureTopLine()
+        documentSession.captureTopLine()
     }
 
     private func appendCategories(from nodes: [BlogNode], into destinations: inout [CategoryDestination]) {
