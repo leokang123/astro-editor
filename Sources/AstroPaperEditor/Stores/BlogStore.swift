@@ -27,6 +27,7 @@ final class BlogStore: ObservableObject {
     private let siteSettingsService = SiteSettingsService()
     private let maxBuildLogLength = 20_000
     private let editorSession = EditorSession()
+    private var scanTask: Task<Void, Never>?
 
     var editorTopLine: Int {
         editorSession.topLine
@@ -103,12 +104,27 @@ final class BlogStore: ObservableObject {
     }
 
     func rescan() {
-        do {
-            tree = try fileService.scan(projectRoot: projectRoot)
-            statusText = "Scanned \(blogRoot.path)"
-        } catch {
-            tree = []
-            message = AppMessage(text: error.localizedDescription)
+        let root = projectRoot
+        let service = fileService
+        let rootPath = blogRoot.path
+        scanTask?.cancel()
+        statusText = "Scanning \(rootPath)"
+
+        scanTask = Task {
+            do {
+                let scannedTree = try await Task.detached(priority: .userInitiated) {
+                    try service.scan(projectRoot: root)
+                }.value
+                guard !Task.isCancelled, projectRoot == root else { return }
+                tree = scannedTree
+                statusText = "Scanned \(rootPath)"
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled, projectRoot == root else { return }
+                tree = []
+                message = AppMessage(text: error.localizedDescription)
+            }
         }
     }
 
@@ -214,9 +230,10 @@ final class BlogStore: ObservableObject {
                 ogImage: ogImage,
                 under: parent
             )
+            let relativePath = BlogFileService.relativePath(from: blogRoot, to: url)
+            selectionID = BlogNodeID.make(kind: .document, relativePath: relativePath)
+            try openDocument(at: url, relativePath: relativePath)
             rescan()
-            let id = BlogNodeID.make(kind: .document, relativePath: BlogFileService.relativePath(from: blogRoot, to: url))
-            selectNode(id: id)
         } catch {
             message = AppMessage(text: error.localizedDescription)
         }
@@ -566,10 +583,14 @@ final class BlogStore: ObservableObject {
     }
 
     private func openDocument(_ node: BlogNode) throws {
-        currentDocument = try fileService.readDocument(at: node.url, blogRoot: blogRoot)
+        try openDocument(at: node.url, relativePath: node.relativePath)
+    }
+
+    private func openDocument(at url: URL, relativePath: String) throws {
+        currentDocument = try fileService.readDocument(at: url, blogRoot: blogRoot)
         resetEditorSession()
         isDirty = false
-        statusText = "Opened \(node.relativePath)"
+        statusText = "Opened \(relativePath)"
     }
 
     private func closeCurrentDocument() {
