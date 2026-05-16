@@ -1,11 +1,20 @@
 import SwiftUI
 
 struct EditorView: View {
-    @ObservedObject var store: BlogStore
+    let document: BlogDocument?
+    let editorMode: EditorMode
+    let editorTopLine: Int
+    let projectRoot: URL
+    var onTogglePreview: () -> Void
+    var onTextChange: () -> Void
+    var onRegisterBodyProvider: (((() -> String?)?) -> Void)
+    var onRegisterTopLineProvider: (((() -> Int?)?) -> Void)
+    var onInsertImages: ([PastedImage]) -> String
+    var onSourceLineChange: (Int) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
-            if let document = store.currentDocument {
+            if let document {
                 VStack(spacing: 0) {
                     HStack {
                         Image(systemName: "doc.text")
@@ -16,9 +25,9 @@ struct EditorView: View {
                             .truncationMode(.middle)
                         Spacer()
                         Button {
-                            store.toggleEditorMode()
+                            onTogglePreview()
                         } label: {
-                            Label(store.editorMode == .edit ? "Preview" : "Edit", systemImage: store.editorMode == .edit ? "doc.richtext" : "pencil")
+                            Label(editorMode == .edit ? "Preview" : "Edit", systemImage: editorMode == .edit ? "doc.richtext" : "pencil")
                         }
                         .keyboardShortcut("e", modifiers: .command)
                         .help("Toggle Edit and Preview (Command+E)")
@@ -27,33 +36,33 @@ struct EditorView: View {
                     .padding(.vertical, 10)
                     .background(.bar)
 
-                    switch store.editorMode {
+                    switch editorMode {
                     case .edit:
                         MarkdownTextView(
                             documentID: document.fileURL.path,
                             text: document.body,
-                            targetLine: store.editorTopLine,
+                            targetLine: editorTopLine,
                             onTextChange: {
-                                store.markBodyChanged()
+                                onTextChange()
                             },
                             onRegisterBodyProvider: { provider in
-                                store.setEditorBodyProvider(provider)
+                                onRegisterBodyProvider(provider)
                             },
                             onRegisterTopLineProvider: { provider in
-                                store.setEditorTopLineProvider(provider)
+                                onRegisterTopLineProvider(provider)
                             },
                             onInsertImages: { images in
-                                store.insertImages(images)
+                                onInsertImages(images)
                             },
-                            onTogglePreview: store.toggleEditorMode
+                            onTogglePreview: onTogglePreview
                         )
                     case .preview:
                         MarkdownPreviewView(
                             document: document,
-                            projectRoot: store.projectRoot,
-                            sourceLine: store.editorTopLine,
+                            projectRoot: projectRoot,
+                            sourceLine: editorTopLine,
                             onSourceLineChange: { line in
-                                store.updateEditorTopLine(line)
+                                onSourceLineChange(line)
                             }
                         )
                     }

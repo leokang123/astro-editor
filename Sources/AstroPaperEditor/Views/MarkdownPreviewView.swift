@@ -27,16 +27,21 @@ struct MarkdownPreviewView: NSViewRepresentable {
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
+        let previousSourceLine = context.coordinator.sourceLine
         context.coordinator.sourceLine = sourceLine
         context.coordinator.onSourceLineChange = onSourceLineChange
         let renderKey = [
             document.fileURL.path,
             document.frontmatter.title,
             document.frontmatter.description,
-            String(document.body.hashValue),
-            String(sourceLine)
+            String(document.body.hashValue)
         ].joined(separator: "\u{1F}")
-        guard context.coordinator.renderKey != renderKey else { return }
+        guard context.coordinator.renderKey != renderKey else {
+            if previousSourceLine != sourceLine {
+                context.coordinator.scrollToSourceLine(in: webView)
+            }
+            return
+        }
         context.coordinator.renderKey = renderKey
 
         let html = MarkdownPreviewHTMLRenderer(document: document, projectRoot: projectRoot).html()
@@ -49,7 +54,7 @@ struct MarkdownPreviewView: NSViewRepresentable {
 
     private static let sourceLineScript = """
     (() => {
-      let scheduled = false;
+      var scheduled = false;
       const report = () => {
         scheduled = false;
         const elements = Array.from(document.querySelectorAll("[data-source-line]"));
@@ -114,7 +119,7 @@ struct MarkdownPreviewView: NSViewRepresentable {
             scrollToSourceLine(in: webView)
         }
 
-        private func scrollToSourceLine(in webView: WKWebView) {
+        func scrollToSourceLine(in webView: WKWebView) {
             let line = max(sourceLine, 1)
             let script = """
             (() => {
@@ -505,15 +510,14 @@ private struct MarkdownPreviewHTMLRenderer {
 
     private func inlineHTML(_ markdown: String) -> String {
         var html = escapeHTML(markdown)
-        html = replacePattern(#"`([^`]+)`"#, in: html, with: "<code>$1</code>")
-        html = replacePattern(#"\*\*([^*]+)\*\*"#, in: html, with: "<strong>$1</strong>")
-        html = replacePattern(#"(?<!\*)\*([^*]+)\*(?!\*)"#, in: html, with: "<em>$1</em>")
-        html = replacePattern(#"\[([^\]]+)\]\(([^)]+)\)"#, in: html, with: "<a href=\"$2\">$1</a>")
+        html = replacePattern(Self.inlineCodeRegex, in: html, with: "<code>$1</code>")
+        html = replacePattern(Self.strongRegex, in: html, with: "<strong>$1</strong>")
+        html = replacePattern(Self.emphasisRegex, in: html, with: "<em>$1</em>")
+        html = replacePattern(Self.linkRegex, in: html, with: "<a href=\"$2\">$1</a>")
         return html.replacingOccurrences(of: "\n", with: "<br>")
     }
 
-    private func replacePattern(_ pattern: String, in text: String, with template: String) -> String {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+    private func replacePattern(_ regex: NSRegularExpression, in text: String, with template: String) -> String {
         let range = NSRange(text.startIndex..<text.endIndex, in: text)
         return regex.stringByReplacingMatches(in: text, range: range, withTemplate: template)
     }
@@ -680,6 +684,11 @@ private struct MarkdownPreviewHTMLRenderer {
             .replacingOccurrences(of: ">", with: "&gt;")
             .replacingOccurrences(of: "\"", with: "&quot;")
     }
+
+    private static let inlineCodeRegex = try! NSRegularExpression(pattern: #"`([^`]+)`"#)
+    private static let strongRegex = try! NSRegularExpression(pattern: #"\*\*([^*]+)\*\*"#)
+    private static let emphasisRegex = try! NSRegularExpression(pattern: #"(?<!\*)\*([^*]+)\*(?!\*)"#)
+    private static let linkRegex = try! NSRegularExpression(pattern: #"\[([^\]]+)\]\(([^)]+)\)"#)
 }
 
 private struct PreviewAssets {
@@ -711,11 +720,31 @@ private struct PreviewAssets {
         case .stylesheet:
             return "<link rel=\"stylesheet\" href=\"\(url.absoluteString)\">"
         case .script:
-            guard let script = try? String(contentsOf: url, encoding: .utf8) else {
+            guard let script = Self.cachedScript(for: url) else {
                 return fallbackTag(for: relativePath, kind: kind)
             }
             return "<script>\n\(script.replacingOccurrences(of: "</script>", with: "<\\/script>"))\n</script>"
         }
+    }
+
+    private static func cachedScript(for url: URL) -> String? {
+        let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+        let cacheKey = [
+            url.path,
+            String(values?.contentModificationDate?.timeIntervalSince1970 ?? 0),
+            String(values?.fileSize ?? 0)
+        ].joined(separator: "|") as NSString
+
+        if let cached = scriptCache.object(forKey: cacheKey) {
+            return cached as String
+        }
+
+        guard let script = try? String(contentsOf: url, encoding: .utf8) else {
+            return nil
+        }
+
+        scriptCache.setObject(script as NSString, forKey: cacheKey)
+        return script
     }
 
     private func fallbackTag(for relativePath: String, kind: AssetKind) -> String {
@@ -737,4 +766,6 @@ private struct PreviewAssets {
         case stylesheet
         case script
     }
+
+    private static let scriptCache = NSCache<NSString, NSString>()
 }

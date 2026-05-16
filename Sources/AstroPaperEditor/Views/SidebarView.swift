@@ -1,8 +1,13 @@
 import SwiftUI
 
 struct SidebarView: View {
-    @ObservedObject var store: BlogStore
+    let tree: [BlogNode]
+    let selectionID: String?
+    let selectedNode: BlogNode?
     @Binding var activeSheet: ActiveSheet?
+    var onSelectNode: (String?) -> Void
+    var onRenameSelected: () -> Void
+    var onDeleteSelected: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -16,17 +21,17 @@ struct SidebarView: View {
 
                 Divider()
 
-                OutlineGroup(store.tree, children: \.outlineChildren) { node in
+                OutlineGroup(tree, children: \.outlineChildren) { node in
                     Label(node.name, systemImage: node.systemImage)
                         .tag(node.id)
                         .contextMenu {
                             Button("New Category") { activeSheet = .newCategory }
                             Button("New Document") { activeSheet = .newDocument }
                             Divider()
-                            Button("Rename") { store.promptRenameSelected() }
+                            Button("Rename") { onRenameSelected() }
                             Button("Move") { activeSheet = .move }
                             Divider()
-                            Button("Delete", role: .destructive) { store.deleteSelected() }
+                            Button("Delete", role: .destructive) { onDeleteSelected() }
                         }
                 }
             }
@@ -50,13 +55,13 @@ struct SidebarView: View {
                 Spacer()
 
                 Menu {
-                    Button("Rename") { store.promptRenameSelected() }
+                    Button("Rename") { onRenameSelected() }
                     Button("Move") { activeSheet = .move }
-                    Button("Delete", role: .destructive) { store.deleteSelected() }
+                    Button("Delete", role: .destructive) { onDeleteSelected() }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
-                .disabled(store.selectedNode == nil || store.selectionID == BlogNodeID.root)
+                .disabled(selectedNode == nil || selectionID == BlogNodeID.root)
             }
             .labelStyle(.iconOnly)
             .padding(8)
@@ -65,8 +70,8 @@ struct SidebarView: View {
 
     private var selectionBinding: Binding<String?> {
         Binding(
-            get: { store.selectionID },
-            set: { store.selectNode(id: $0) }
+            get: { selectionID },
+            set: { onSelectNode($0) }
         )
     }
 }

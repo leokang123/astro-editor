@@ -3,7 +3,11 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct InspectorView: View {
-    @ObservedObject var store: BlogStore
+    let document: BlogDocument?
+    var onUpdateFrontmatter: ((inout Frontmatter) -> Void) -> Void
+    var onSetOGImage: (URL) -> Void
+    var onClearOGImage: () -> Void
+    var onResolveAssetImageURL: (String?) -> URL?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -15,7 +19,7 @@ struct InspectorView: View {
             .padding(14)
             .background(.bar)
 
-            if let document = store.currentDocument {
+            if let document {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
                         InspectorCard {
@@ -54,14 +58,21 @@ struct InspectorView: View {
                         }
 
                         InspectorCard {
-                            OGImageInspector(store: store)
+                            OGImageInspector(
+                                document: document,
+                                onSetOGImage: onSetOGImage,
+                                onClearOGImage: onClearOGImage,
+                                onResolveAssetImageURL: onResolveAssetImageURL
+                            )
                         }
 
                         InspectorCard {
                             TagsEditor(
                                 documentID: document.id,
                                 tags: document.frontmatter.tags,
-                                store: store
+                                onUpdateTags: { tags in
+                                    onUpdateFrontmatter { $0.tags = tags }
+                                }
                             )
                         }
 
@@ -98,28 +109,28 @@ struct InspectorView: View {
 
     private func frontmatterBinding(_ keyPath: WritableKeyPath<Frontmatter, String>) -> Binding<String> {
         Binding(
-            get: { store.currentDocument?.frontmatter[keyPath: keyPath] ?? "" },
+            get: { document?.frontmatter[keyPath: keyPath] ?? "" },
             set: { value in
-                store.updateFrontmatter { $0[keyPath: keyPath] = value }
+                onUpdateFrontmatter { $0[keyPath: keyPath] = value }
             }
         )
     }
 
     private var orderBinding: Binding<String> {
         Binding(
-            get: { store.currentDocument?.frontmatter.order ?? "" },
+            get: { document?.frontmatter.order ?? "" },
             set: { value in
                 let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-                store.updateFrontmatter { $0.order = trimmed.isEmpty ? nil : trimmed }
+                onUpdateFrontmatter { $0.order = trimmed.isEmpty ? nil : trimmed }
             }
         )
     }
 
     private var featuredBinding: Binding<Bool> {
         Binding(
-            get: { store.currentDocument?.frontmatter.featured == true },
+            get: { document?.frontmatter.featured == true },
             set: { value in
-                store.updateFrontmatter { $0.featured = value ? true : nil }
+                onUpdateFrontmatter { $0.featured = value ? true : nil }
             }
         )
     }
@@ -163,13 +174,13 @@ private struct FieldRow<Content: View>: View {
 private struct TagsEditor: View {
     let documentID: String
     let tags: [String]
-    @ObservedObject var store: BlogStore
+    var onUpdateTags: ([String]) -> Void
     @State private var draft: String
 
-    init(documentID: String, tags: [String], store: BlogStore) {
+    init(documentID: String, tags: [String], onUpdateTags: @escaping ([String]) -> Void) {
         self.documentID = documentID
         self.tags = tags
-        self.store = store
+        self.onUpdateTags = onUpdateTags
         _draft = State(initialValue: tags.joined(separator: "\n"))
     }
 
@@ -188,7 +199,7 @@ private struct TagsEditor: View {
                 get: { draft },
                 set: { value in
                     draft = value
-                    store.updateFrontmatter { $0.tags = value.trimmingForTags }
+                    onUpdateTags(value.trimmingForTags)
                 }
             ))
             .font(.body)
@@ -209,7 +220,10 @@ private struct TagsEditor: View {
 }
 
 private struct OGImageInspector: View {
-    @ObservedObject var store: BlogStore
+    let document: BlogDocument
+    var onSetOGImage: (URL) -> Void
+    var onClearOGImage: () -> Void
+    var onResolveAssetImageURL: (String?) -> URL?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -218,7 +232,7 @@ private struct OGImageInspector: View {
                 Spacer()
                 if hasImage {
                     Button("Clear") {
-                        store.clearOGImage()
+                        onClearOGImage()
                     }
                     .buttonStyle(.bordered)
                 }
@@ -276,11 +290,11 @@ private struct OGImageInspector: View {
     }
 
     private var hasImage: Bool {
-        store.currentDocument?.frontmatter.ogImage?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        document.frontmatter.ogImage?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
     }
 
     private var imageURL: URL? {
-        store.resolvedAssetImageURL(store.currentDocument?.frontmatter.ogImage)
+        onResolveAssetImageURL(document.frontmatter.ogImage)
     }
 
     private var nsImage: NSImage? {
@@ -293,7 +307,7 @@ private struct OGImageInspector: View {
     }
 
     private var ogImagePath: String {
-        store.currentDocument?.frontmatter.ogImage ?? ""
+        document.frontmatter.ogImage ?? ""
     }
 
     private func chooseImage() {
@@ -305,7 +319,7 @@ private struct OGImageInspector: View {
         panel.message = "Choose an image to copy into src/assets/images and use as ogImage."
 
         if panel.runModal() == .OK, let url = panel.url {
-            store.setOGImage(from: url)
+            onSetOGImage(url)
         }
     }
 }

@@ -10,21 +10,50 @@ struct ContentView: View {
         VStack(spacing: 0) {
             HSplitView {
                 if showSidebar {
-                    SidebarView(store: store, activeSheet: $activeSheet)
+                    SidebarView(
+                        tree: store.tree,
+                        selectionID: store.selectionID,
+                        selectedNode: store.selectedNode,
+                        activeSheet: $activeSheet,
+                        onSelectNode: store.selectNode,
+                        onRenameSelected: store.promptRenameSelected,
+                        onDeleteSelected: store.deleteSelected
+                    )
                         .frame(minWidth: 240, idealWidth: 280, maxWidth: 360)
                 }
 
-                EditorView(store: store)
+                EditorView(
+                    document: store.currentDocument,
+                    editorMode: store.editorMode,
+                    editorTopLine: store.editorTopLine,
+                    projectRoot: store.projectRoot,
+                    onTogglePreview: store.toggleEditorMode,
+                    onTextChange: store.markBodyChanged,
+                    onRegisterBodyProvider: store.setEditorBodyProvider,
+                    onRegisterTopLineProvider: store.setEditorTopLineProvider,
+                    onInsertImages: store.insertImages,
+                    onSourceLineChange: store.updateEditorTopLine
+                )
                     .frame(minWidth: 420)
 
                 if showInspector {
-                    InspectorView(store: store)
+                    InspectorView(
+                        document: store.currentDocument,
+                        onUpdateFrontmatter: store.updateFrontmatter,
+                        onSetOGImage: store.setOGImage,
+                        onClearOGImage: store.clearOGImage,
+                        onResolveAssetImageURL: store.resolvedAssetImageURL
+                    )
                         .frame(minWidth: 280, idealWidth: 320, maxWidth: 420)
                 }
             }
 
             Divider()
-            StatusBar(store: store)
+            StatusBar(
+                projectRootPath: store.projectRoot.path,
+                isDirty: store.isDirty,
+                statusText: store.statusText
+            )
         }
         .toolbar {
             ToolbarItemGroup {
@@ -98,22 +127,24 @@ struct ContentView: View {
 }
 
 private struct StatusBar: View {
-    @ObservedObject var store: BlogStore
+    let projectRootPath: String
+    let isDirty: Bool
+    let statusText: String
 
     var body: some View {
         HStack(spacing: 12) {
-            Text(store.projectRoot.path)
+            Text(projectRootPath)
                 .lineLimit(1)
                 .truncationMode(.middle)
 
             Spacer()
 
-            if store.isDirty {
+            if isDirty {
                 Label("Unsaved", systemImage: "circle.fill")
                     .foregroundStyle(.orange)
             }
 
-            Text(store.statusText)
+            Text(statusText)
                 .lineLimit(1)
                 .foregroundStyle(.secondary)
         }
