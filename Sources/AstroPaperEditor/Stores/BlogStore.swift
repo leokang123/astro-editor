@@ -382,6 +382,21 @@ final class BlogStore: ObservableObject {
             .appendingPathComponent(filename)
     }
 
+    func resolvedPublicURL(_ publicPath: String?) -> URL? {
+        guard let publicPath else { return nil }
+        let trimmed = publicPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("/") else { return nil }
+        let relativePath = String(trimmed.dropFirst())
+        guard !relativePath.isEmpty, !relativePath.contains("..") else { return nil }
+        return projectRoot
+            .appendingPathComponent("public", isDirectory: true)
+            .appendingPathComponent(relativePath)
+    }
+
+    func copyAboutProfileImage(from sourceURL: URL) throws -> String {
+        try imageService.copyAboutProfileImage(from: sourceURL, inProjectRoot: projectRoot)
+    }
+
     func runBuild() {
         guard !isBuilding else { return }
         isBuilding = true

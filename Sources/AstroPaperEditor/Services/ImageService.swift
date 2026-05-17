@@ -35,6 +35,22 @@ struct ImageService {
         return Self.assetImagePrefix + destination.lastPathComponent
     }
 
+    func copyAboutProfileImage(from sourceURL: URL, inProjectRoot projectRoot: URL) throws -> String {
+        let publicDirectory = projectRoot.appendingPathComponent("public", isDirectory: true)
+        try FileManager.default.createDirectory(at: publicDirectory, withIntermediateDirectories: true)
+
+        let fileExtension = normalizedExtension(sourceURL.pathExtension)
+        let destination = publicDirectory.appendingPathComponent("about-profile.\(fileExtension)")
+        if sourceURL.standardizedFileURL.path != destination.standardizedFileURL.path {
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+            try FileManager.default.copyItem(at: sourceURL, to: destination)
+        }
+
+        return "/" + destination.lastPathComponent
+    }
+
     private func assetImageDirectory(inProjectRoot projectRoot: URL) throws -> URL {
         let imageDirectory = projectRoot
             .appendingPathComponent("src", isDirectory: true)
