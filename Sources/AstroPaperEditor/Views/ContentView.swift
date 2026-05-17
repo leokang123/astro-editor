@@ -3,7 +3,6 @@ import SwiftUI
 struct ContentView: View {
     @ObservedObject var store: BlogStore
     @ObservedObject private var gitController: GitController
-    @State private var activeSheet: ActiveSheet?
     @SceneStorage("showSidebar") private var showSidebar = true
     @SceneStorage("showInspector") private var showInspector = true
 
@@ -20,7 +19,7 @@ struct ContentView: View {
                         tree: store.tree,
                         selectionID: store.selectionID,
                         selectedNode: store.selectedNode,
-                        activeSheet: $activeSheet,
+                        activeSheet: $store.activeSheet,
                         onSelectNode: store.selectNode,
                         onRenameSelected: store.promptRenameSelected,
                         onDeleteSelected: store.deleteSelected
@@ -82,6 +81,14 @@ struct ContentView: View {
                 Divider()
 
                 Button {
+                    store.activeSheet = .featuredDocuments
+                } label: {
+                    Label("Featured", systemImage: "star.fill")
+                }
+
+                Divider()
+
+                Button {
                     store.chooseProjectFolder()
                 } label: {
                     Label("Project", systemImage: "folder.badge.gearshape")
@@ -103,7 +110,7 @@ struct ContentView: View {
                 .disabled(!store.canSave)
 
                 Button {
-                    activeSheet = .commitPush
+                    store.activeSheet = .commitPush
                 } label: {
                     Label(gitController.isOperationRunning ? "Pushing" : "Commit & Push", systemImage: "paperplane")
                 }
@@ -116,21 +123,23 @@ struct ContentView: View {
                 }
             }
         }
-        .sheet(item: $activeSheet) { sheet in
+        .sheet(item: $store.activeSheet) { sheet in
             switch sheet {
             case .newCategory:
-                NewCategorySheet(store: store, activeSheet: $activeSheet)
+                NewCategorySheet(store: store, activeSheet: $store.activeSheet)
             case .newDocument:
-                NewDocumentSheet(store: store, activeSheet: $activeSheet)
+                NewDocumentSheet(store: store, activeSheet: $store.activeSheet)
             case .move:
-                MoveSheet(store: store, activeSheet: $activeSheet)
+                MoveSheet(store: store, activeSheet: $store.activeSheet)
             case .commitPush:
                 CommitPushSheet(
                     gitController: gitController,
-                    activeSheet: $activeSheet,
+                    activeSheet: $store.activeSheet,
                     onRefreshGitStatus: store.refreshGitStatus,
                     onCommitAndPush: store.commitAndPush
                 )
+            case .featuredDocuments:
+                FeaturedDocumentsSheet(store: store, activeSheet: $store.activeSheet)
             }
         }
         .alert(item: $store.message) { message in
@@ -166,13 +175,4 @@ private struct StatusBar: View {
         .padding(.vertical, 5)
         .background(.bar)
     }
-}
-
-enum ActiveSheet: String, Identifiable {
-    case newCategory
-    case newDocument
-    case move
-    case commitPush
-
-    var id: String { rawValue }
 }

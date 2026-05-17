@@ -16,6 +16,15 @@ struct AstroPaperEditorApp: App {
                 }
         }
         .commands {
+            CommandGroup(replacing: .newItem) {
+                Button("New Document") {
+                    Task { @MainActor in
+                        store.requestNewDocument()
+                    }
+                }
+                .keyboardShortcut("n", modifiers: .command)
+            }
+
             CommandGroup(replacing: .saveItem) {
                 Button("Save") {
                     Task { @MainActor in
@@ -36,7 +45,9 @@ struct AstroPaperEditorApp: App {
 
             CommandGroup(after: .textEditing) {
                 Button("Find") {
-                    _ = EditorCommandDispatcher.performTextFinderAction(.showFindInterface)
+                    Task { @MainActor in
+                        store.showEditorFindInterface()
+                    }
                 }
                 .keyboardShortcut("f", modifiers: .command)
 
@@ -58,19 +69,24 @@ struct AstroPaperEditorApp: App {
     }
 }
 
-private enum EditorCommandDispatcher {
-    static func performFindShortcut(_ event: NSEvent) -> Bool {
+enum EditorCommandDispatcher {
+    @MainActor
+    static func performFindShortcut(_ event: NSEvent, store: BlogStore?) -> Bool {
         let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
-        guard flags.contains(.command),
-              !flags.contains(.option),
-              !flags.contains(.control),
-              let key = event.charactersIgnoringModifiers?.lowercased() else {
+        guard let key = event.charactersIgnoringModifiers?.lowercased(),
+              !flags.contains(.option) else {
             return false
         }
 
+        if flags == [.control], key == "f", store?.editorMode == .preview {
+            return store?.showEditorFindInterface() ?? false
+        }
+
+        guard flags.contains(.command), !flags.contains(.control) else { return false }
+
         switch (key, flags.contains(.shift)) {
         case ("f", false):
-            return performTextFinderAction(.showFindInterface)
+            return store?.showEditorFindInterface() ?? performTextFinderAction(.showFindInterface)
         case ("g", false):
             return performTextFinderAction(.nextMatch)
         case ("g", true):
@@ -118,7 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            EditorCommandDispatcher.performFindShortcut(event) ? nil : event
+            EditorCommandDispatcher.performFindShortcut(event, store: self.store) ? nil : event
         }
     }
 

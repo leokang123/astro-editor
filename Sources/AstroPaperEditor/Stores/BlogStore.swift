@@ -17,6 +17,7 @@ final class BlogStore: ObservableObject {
     @Published var isAssetOptimizeRunning = false
     @Published var message: AppMessage?
     @Published var editorMode: EditorMode = .edit
+    @Published var activeSheet: ActiveSheet?
 
     let gitController = GitController()
 
@@ -209,6 +210,23 @@ final class BlogStore: ObservableObject {
             flushSessionDraftsToCurrentDocument()
         }
         editorMode = editorMode == .edit ? .preview : .edit
+    }
+
+    @discardableResult
+    func showEditorFindInterface() -> Bool {
+        guard currentDocument != nil else { return false }
+        if editorMode == .preview {
+            toggleEditorMode()
+            DispatchQueue.main.async {
+                _ = EditorCommandDispatcher.performTextFinderAction(.showFindInterface)
+            }
+            return true
+        }
+        return EditorCommandDispatcher.performTextFinderAction(.showFindInterface)
+    }
+
+    func requestNewDocument() {
+        activeSheet = .newDocument
     }
 
     func createCategory(named name: String, parentID: String?) {
@@ -557,6 +575,19 @@ final class BlogStore: ObservableObject {
         statusText = "Saved USER_SOCIALS"
     }
 
+    func featuredDocuments() throws -> [FeaturedDocument] {
+        try documentNodes(from: tree).compactMap { node in
+            let document = try fileService.readDocument(at: node.url, blogRoot: blogRoot)
+            guard document.frontmatter.featured == true else { return nil }
+            return FeaturedDocument(
+                id: node.id,
+                title: document.frontmatter.title,
+                relativePath: node.relativePath,
+                url: node.url
+            )
+        }
+    }
+
     func confirmTermination() -> NSApplication.TerminateReply {
         recomputeDirtyState()
         guard isDirty else { return .terminateNow }
@@ -673,6 +704,17 @@ final class BlogStore: ObservableObject {
             let title = node.relativePath.isEmpty ? node.name : node.relativePath
             destinations.append(CategoryDestination(id: node.id, title: title, url: node.url))
             appendCategories(from: node.children, into: &destinations)
+        }
+    }
+
+    private func documentNodes(from nodes: [BlogNode]) -> [BlogNode] {
+        nodes.flatMap { node -> [BlogNode] in
+            switch node.kind {
+            case .document:
+                return [node]
+            case .category:
+                return documentNodes(from: node.children)
+            }
         }
     }
 }
