@@ -14,6 +14,7 @@ struct MarkdownPreviewView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
+        configuration.setURLSchemeHandler(context.coordinator.resourceSchemeHandler, forURLScheme: "astro-paper-resource")
         configuration.userContentController.add(context.coordinator, name: "sourceLine")
         configuration.userContentController.addUserScript(WKUserScript(
             source: Self.sourceLineScript,
@@ -30,19 +31,21 @@ struct MarkdownPreviewView: NSViewRepresentable {
         let previousSourceLine = context.coordinator.sourceLine
         context.coordinator.sourceLine = sourceLine
         context.coordinator.onSourceLineChange = onSourceLineChange
-        let renderKey = [
+        context.coordinator.resourceSchemeHandler.projectRoot = projectRoot.standardizedFileURL
+        let metadataKey = [
             document.fileURL.path,
             document.frontmatter.title,
-            document.frontmatter.description,
-            String(document.body.hashValue)
+            document.frontmatter.description
         ].joined(separator: "\u{1F}")
-        guard context.coordinator.renderKey != renderKey else {
+
+        guard context.coordinator.metadataKey != metadataKey || context.coordinator.body != document.body else {
             if previousSourceLine != sourceLine {
                 context.coordinator.scrollToSourceLine(in: webView)
             }
             return
         }
-        context.coordinator.renderKey = renderKey
+        context.coordinator.metadataKey = metadataKey
+        context.coordinator.body = document.body
 
         let html = MarkdownPreviewHTMLRenderer(document: document, projectRoot: projectRoot).html()
         webView.loadHTMLString(html, baseURL: projectRoot)
@@ -83,9 +86,11 @@ struct MarkdownPreviewView: NSViewRepresentable {
     """
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
-        var renderKey = ""
+        var metadataKey = ""
+        var body = ""
         var sourceLine = 1
         var onSourceLineChange: (Int) -> Void
+        let resourceSchemeHandler = PreviewResourceSchemeHandler()
 
         init(onSourceLineChange: @escaping (Int) -> Void) {
             self.onSourceLineChange = onSourceLineChange
@@ -158,6 +163,62 @@ struct MarkdownPreviewView: NSViewRepresentable {
             DispatchQueue.main.async {
                 webView.evaluateJavaScript(script)
             }
+        }
+    }
+}
+
+final class PreviewResourceSchemeHandler: NSObject, WKURLSchemeHandler {
+    var projectRoot: URL?
+
+    func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
+        guard let fileURL = fileURL(for: urlSchemeTask.request.url),
+              let data = try? Data(contentsOf: fileURL) else {
+            urlSchemeTask.didFailWithError(URLError(.fileDoesNotExist))
+            return
+        }
+
+        let response = URLResponse(
+            url: urlSchemeTask.request.url ?? fileURL,
+            mimeType: mimeType(for: fileURL.pathExtension),
+            expectedContentLength: data.count,
+            textEncodingName: nil
+        )
+        urlSchemeTask.didReceive(response)
+        urlSchemeTask.didReceive(data)
+        urlSchemeTask.didFinish()
+    }
+
+    func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {}
+
+    private func fileURL(for requestURL: URL?) -> URL? {
+        guard let requestURL,
+              requestURL.scheme == "astro-paper-resource",
+              let projectRoot else {
+            return nil
+        }
+
+        let fileURL = URL(fileURLWithPath: requestURL.path).standardizedFileURL
+        let projectPath = projectRoot.standardizedFileURL.path
+        guard fileURL.path == projectPath || fileURL.path.hasPrefix(projectPath + "/") else {
+            return nil
+        }
+        return fileURL
+    }
+
+    private func mimeType(for pathExtension: String) -> String {
+        switch pathExtension.lowercased() {
+        case "jpg", "jpeg":
+            return "image/jpeg"
+        case "gif":
+            return "image/gif"
+        case "svg":
+            return "image/svg+xml"
+        case "webp":
+            return "image/webp"
+        case "heic":
+            return "image/heic"
+        default:
+            return "image/png"
         }
     }
 }

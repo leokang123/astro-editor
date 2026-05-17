@@ -38,17 +38,7 @@ struct Frontmatter: Equatable {
         let normalized = markdown.replacingOccurrences(of: "\r\n", with: "\n")
         guard normalized.hasPrefix("---\n") else {
             return (
-                Frontmatter(
-                    title: fallbackTitle,
-                    order: nil,
-                    pubDatetime: DateFormatting.astropaperTimestamp.string(from: Date()),
-                    modDatetime: DateFormatting.astropaperTimestamp.string(from: Date()),
-                    description: "",
-                    featured: nil,
-                    ogImage: nil,
-                    tags: [],
-                    extraLines: []
-                ),
+                fallback(fallbackTitle: fallbackTitle),
                 normalized
             )
         }
@@ -56,17 +46,7 @@ struct Frontmatter: Equatable {
         let searchStart = normalized.index(normalized.startIndex, offsetBy: 4)
         guard let closeRange = normalized.range(of: "\n---", range: searchStart..<normalized.endIndex) else {
             return (
-                Frontmatter(
-                    title: fallbackTitle,
-                    order: nil,
-                    pubDatetime: DateFormatting.astropaperTimestamp.string(from: Date()),
-                    modDatetime: DateFormatting.astropaperTimestamp.string(from: Date()),
-                    description: "",
-                    featured: nil,
-                    ogImage: nil,
-                    tags: [],
-                    extraLines: []
-                ),
+                fallback(fallbackTitle: fallbackTitle),
                 normalized
             )
         }
@@ -78,6 +58,25 @@ struct Frontmatter: Equatable {
         }
         let body = String(normalized[bodyStart...])
 
+        return (parseYAML(yaml, fallbackTitle: fallbackTitle), body)
+    }
+
+    static func parseFrontmatter(from markdown: String, fallbackTitle: String) -> Frontmatter {
+        let normalized = markdown.replacingOccurrences(of: "\r\n", with: "\n")
+        guard normalized.hasPrefix("---\n") else {
+            return fallback(fallbackTitle: fallbackTitle)
+        }
+
+        let searchStart = normalized.index(normalized.startIndex, offsetBy: 4)
+        guard let closeRange = normalized.range(of: "\n---", range: searchStart..<normalized.endIndex) else {
+            return fallback(fallbackTitle: fallbackTitle)
+        }
+
+        let yaml = String(normalized[searchStart..<closeRange.lowerBound])
+        return parseYAML(yaml, fallbackTitle: fallbackTitle)
+    }
+
+    private static func parseYAML(_ yaml: String, fallbackTitle: String) -> Frontmatter {
         var title = fallbackTitle
         var order: String?
         var pubDatetime = ""
@@ -126,19 +125,31 @@ struct Frontmatter: Equatable {
         }
 
         let now = DateFormatting.astropaperTimestamp.string(from: Date())
-        return (
-            Frontmatter(
-                title: title,
-                order: order,
-                pubDatetime: pubDatetime.isEmpty ? now : pubDatetime,
-                modDatetime: modDatetime.isEmpty ? now : modDatetime,
-                description: description,
-                featured: featured,
-                ogImage: ogImage,
-                tags: tags,
-                extraLines: extraLines
-            ),
-            body
+        return Frontmatter(
+            title: title,
+            order: order,
+            pubDatetime: pubDatetime.isEmpty ? now : pubDatetime,
+            modDatetime: modDatetime.isEmpty ? now : modDatetime,
+            description: description,
+            featured: featured,
+            ogImage: ogImage,
+            tags: tags,
+            extraLines: extraLines
+        )
+    }
+
+    private static func fallback(fallbackTitle: String) -> Frontmatter {
+        let now = DateFormatting.astropaperTimestamp.string(from: Date())
+        return Frontmatter(
+            title: fallbackTitle,
+            order: nil,
+            pubDatetime: now,
+            modDatetime: now,
+            description: "",
+            featured: nil,
+            ogImage: nil,
+            tags: [],
+            extraLines: []
         )
     }
 

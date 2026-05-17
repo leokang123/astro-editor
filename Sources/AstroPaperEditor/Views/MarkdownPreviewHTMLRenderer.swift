@@ -12,6 +12,7 @@ struct MarkdownPreviewHTMLRenderer {
         <head>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
+          <base href="\(escapeHTML(projectBaseURLString))">
           \(assets.katexStylesheetTag)
           <style>
             :root {
@@ -172,6 +173,11 @@ struct MarkdownPreviewHTMLRenderer {
         let description = document.frontmatter.description.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !description.isEmpty else { return "" }
         return "<p class=\"description\">\(escapeHTML(description))</p>"
+    }
+
+    private var projectBaseURLString: String {
+        let value = projectRoot.standardizedFileURL.absoluteString
+        return value.hasSuffix("/") ? value : value + "/"
     }
 
     private func renderMarkdown(_ markdown: String) -> String {
@@ -510,7 +516,7 @@ struct MarkdownPreviewHTMLRenderer {
         }
 
         guard let url = imageURL(for: source) else { return source }
-        return dataURL(for: url) ?? url.absoluteString
+        return Self.localResourceURLString(for: url)
     }
 
     private func imageURL(for source: String) -> URL? {
@@ -532,33 +538,12 @@ struct MarkdownPreviewHTMLRenderer {
         }
 
         if source.hasPrefix("/") {
-            return URL(fileURLWithPath: source)
+            return projectRoot
+                .appendingPathComponent("public", isDirectory: true)
+                .appendingPathComponent(String(source.dropFirst()))
         }
 
         return nil
-    }
-
-    private func dataURL(for url: URL) -> String? {
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        let mimeType = mimeType(for: url.pathExtension)
-        return "data:\(mimeType);base64,\(data.base64EncodedString())"
-    }
-
-    private func mimeType(for pathExtension: String) -> String {
-        switch pathExtension.lowercased() {
-        case "jpg", "jpeg":
-            return "image/jpeg"
-        case "gif":
-            return "image/gif"
-        case "svg":
-            return "image/svg+xml"
-        case "webp":
-            return "image/webp"
-        case "heic":
-            return "image/heic"
-        default:
-            return "image/png"
-        }
     }
 
     private func escapeHTML(_ text: String) -> String {
@@ -567,6 +552,13 @@ struct MarkdownPreviewHTMLRenderer {
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
             .replacingOccurrences(of: "\"", with: "&quot;")
+    }
+
+    private static func localResourceURLString(for url: URL) -> String {
+        var components = URLComponents()
+        components.scheme = "astro-paper-resource"
+        components.path = url.standardizedFileURL.path
+        return components.url?.absoluteString ?? url.absoluteString
     }
 
     private static let inlineCodeRegex = try! NSRegularExpression(pattern: #"`([^`]+)`"#)

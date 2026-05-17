@@ -17,8 +17,12 @@ AstroPaperEditor is not a general-purpose note app. It is a focused local file e
 - Supports manual save with `Command + S`
 - Updates `modDatetime` only when saving
 - Supports edit and preview modes with `Command + E`
-- Renders Markdown preview with tables, images, Mermaid, and LaTeX support
+- Renders Markdown preview with tables, local images, Mermaid, and LaTeX support
+- Opens the editor find UI from preview with `Command + F`
 - Saves pasted or dropped images into `src/assets/images`
+- Replaces the About page profile image from Preferences
+- Shows featured posts from the toolbar
+- Keeps `Command + N` inside the existing editor window
 - Commits and pushes the selected blog project to trigger GitHub Pages deployment
 - Configures Git remote and branch from Preferences
 - Keeps Docker build as a manual developer-only action in Preferences
@@ -125,6 +129,12 @@ Create a distributable local app bundle:
 
 ```bash
 ./script/package_app.sh
+```
+
+Create GitHub release assets for the current app version:
+
+```bash
+./script/create_release_assets.sh
 ```
 
 The generated app bundle is written to:

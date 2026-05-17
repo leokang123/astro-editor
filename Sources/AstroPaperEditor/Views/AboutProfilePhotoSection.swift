@@ -11,8 +11,7 @@ struct AboutProfilePhotoSection: View {
     @State private var isDropTargeted = false
 
     private var profileImage: NSImage? {
-        guard let profileImageURL else { return nil }
-        return NSImage(contentsOf: profileImageURL)
+        ImageCache.image(at: profileImageURL)
     }
 
     var body: some View {

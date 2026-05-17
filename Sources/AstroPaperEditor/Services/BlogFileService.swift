@@ -35,6 +35,12 @@ struct BlogFileService {
         )
     }
 
+    func readFrontmatter(at url: URL) throws -> Frontmatter {
+        let fallbackTitle = url.deletingPathExtension().lastPathComponent
+        let markdown = try frontmatterPrefix(at: url)
+        return Frontmatter.parseFrontmatter(from: markdown, fallbackTitle: fallbackTitle)
+    }
+
     func writeDocument(_ document: BlogDocument) throws {
         let text = document.frontmatter.rendered() + "\n\n" + document.body.trimmingLeadingNewlines()
         try text.write(to: document.fileURL, atomically: true, encoding: .utf8)
@@ -119,23 +125,28 @@ struct BlogFileService {
     }
 
     private func scanDirectory(_ directory: URL, blogRoot: URL) throws -> [BlogNode] {
-        let contents = try FileManager.default.contentsOfDirectory(
+        let entries = try FileManager.default.contentsOfDirectory(
             at: directory,
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]
-        )
-
-        let sorted = contents.sorted { lhs, rhs in
-            let lhsIsDirectory = (try? lhs.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
-            let rhsIsDirectory = (try? rhs.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
-            if lhsIsDirectory != rhsIsDirectory { return lhsIsDirectory }
-            return lhs.lastPathComponent.localizedStandardCompare(rhs.lastPathComponent) == .orderedAscending
+        ).map { url in
+            (
+                url: url,
+                isDirectory: (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+            )
         }
 
-        return try sorted.compactMap { url in
-            let values = try url.resourceValues(forKeys: [.isDirectoryKey])
+        let sorted = entries.sorted { lhs, rhs in
+            let lhsIsDirectory = lhs.isDirectory
+            let rhsIsDirectory = rhs.isDirectory
+            if lhsIsDirectory != rhsIsDirectory { return lhsIsDirectory }
+            return lhs.url.lastPathComponent.localizedStandardCompare(rhs.url.lastPathComponent) == .orderedAscending
+        }
+
+        return try sorted.compactMap { entry in
+            let url = entry.url
             let relativePath = Self.relativePath(from: blogRoot, to: url)
-            if values.isDirectory == true {
+            if entry.isDirectory {
                 guard url.lastPathComponent != "images" else { return nil }
                 return BlogNode(
                     id: BlogNodeID.make(kind: .category, relativePath: relativePath),
@@ -157,6 +168,39 @@ struct BlogFileService {
                 children: []
             )
         }
+    }
+
+    private func frontmatterPrefix(at url: URL) throws -> String {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+
+        let marker = Data("\n---".utf8)
+        let frontmatterStart = Data("---\n".utf8)
+        var data = Data()
+
+        while let chunk = try handle.read(upToCount: 4_096), !chunk.isEmpty {
+            data.append(chunk)
+
+            if data.count >= frontmatterStart.count, data.prefix(frontmatterStart.count) != frontmatterStart {
+                break
+            }
+
+            if data.count > frontmatterStart.count,
+               let closeRange = data.range(
+                of: marker,
+                options: [],
+                in: data.index(data.startIndex, offsetBy: frontmatterStart.count)..<data.endIndex
+               ) {
+                data = data.subdata(in: data.startIndex..<closeRange.upperBound)
+                break
+            }
+
+            if data.count > 1_048_576 {
+                break
+            }
+        }
+
+        return String(data: data, encoding: .utf8) ?? ""
     }
 }
 

@@ -577,11 +577,11 @@ final class BlogStore: ObservableObject {
 
     func featuredDocuments() throws -> [FeaturedDocument] {
         try documentNodes(from: tree).compactMap { node in
-            let document = try fileService.readDocument(at: node.url, blogRoot: blogRoot)
-            guard document.frontmatter.featured == true else { return nil }
+            let frontmatter = try fileService.readFrontmatter(at: node.url)
+            guard frontmatter.featured == true else { return nil }
             return FeaturedDocument(
                 id: node.id,
-                title: document.frontmatter.title,
+                title: frontmatter.title,
                 relativePath: node.relativePath,
                 url: node.url
             )

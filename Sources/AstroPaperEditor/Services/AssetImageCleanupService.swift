@@ -86,15 +86,8 @@ struct AssetImageCleanupService {
     }
 
     private func imageReferences(in text: String) -> [String] {
-        capturedValues(pattern: #"@/assets/images/([^\s"')\]}>,]+)"#, in: text)
-    }
-
-    private func capturedValues(pattern: String, in text: String) -> [String] {
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
-            return []
-        }
         let range = NSRange(text.startIndex..<text.endIndex, in: text)
-        return regex.matches(in: text, range: range).compactMap { match in
+        return Self.imageReferenceRegex.matches(in: text, range: range).compactMap { match in
             guard match.numberOfRanges > 1,
                   let captureRange = Range(match.range(at: 1), in: text) else {
                 return nil
@@ -173,4 +166,9 @@ struct AssetImageCleanupService {
             "yaml", "yml", "toml", "html"
         ].contains(value.lowercased())
     }
+
+    private static let imageReferenceRegex = try! NSRegularExpression(
+        pattern: #"@/assets/images/([^\s"')\]}>,]+)"#,
+        options: [.caseInsensitive]
+    )
 }

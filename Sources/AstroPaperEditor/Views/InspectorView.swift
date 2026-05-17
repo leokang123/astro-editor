@@ -412,8 +412,7 @@ private struct OGImageInspector: View {
     }
 
     private var nsImage: NSImage? {
-        guard let imageURL else { return nil }
-        return NSImage(contentsOf: imageURL)
+        ImageCache.image(at: imageURL)
     }
 
     private var imageLabel: String {
