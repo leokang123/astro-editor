@@ -42,7 +42,7 @@ struct BlogFileService {
     }
 
     func writeDocument(_ document: BlogDocument) throws {
-        let text = document.frontmatter.rendered() + "\n\n" + document.body.trimmingLeadingNewlines()
+        let text = document.frontmatter.rendered() + "\n" + document.body
         try text.write(to: document.fileURL, atomically: true, encoding: .utf8)
     }
 

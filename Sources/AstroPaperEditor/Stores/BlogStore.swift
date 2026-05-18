@@ -207,6 +207,7 @@ final class BlogStore: ObservableObject {
         guard hasProject else { return }
         guard selectionID != id else { return }
         guard confirmDiscardOrSaveChanges() else { return }
+        hideEditorFindInterface()
         selectionID = id
 
         guard let id, let node = node(withID: id), node.kind == .document else {
@@ -285,6 +286,7 @@ final class BlogStore: ObservableObject {
     func toggleEditorMode() {
         guard canTogglePreview else { return }
         if editorMode == .edit {
+            hideEditorFindInterface()
             captureEditorTopLine()
             flushSessionDraftsToCurrentDocument()
         }
@@ -302,6 +304,10 @@ final class BlogStore: ObservableObject {
             return true
         }
         return EditorCommandDispatcher.performTextFinderAction(.showFindInterface)
+    }
+
+    private func hideEditorFindInterface() {
+        _ = EditorCommandDispatcher.performTextFinderAction(.hideFindInterface)
     }
 
     func requestNewCategory(parentID: String? = nil) {
@@ -455,18 +461,25 @@ final class BlogStore: ObservableObject {
     func deleteNode(id: String) {
         guard hasProject else { return }
         guard let node = node(withID: id) else { return }
-        guard confirmDiscardOrSaveChanges() else { return }
+        let containsCurrentDocument = nodeContainsCurrentDocument(node)
+        if containsCurrentDocument {
+            recomputeDirtyState()
+        }
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Move to Trash?"
-        alert.informativeText = "\(node.name) will be moved to the macOS Trash."
+        if containsCurrentDocument && isDirty {
+            alert.informativeText = "\(node.name) will be moved to the macOS Trash. Unsaved changes in the open document will be discarded."
+        } else {
+            alert.informativeText = "\(node.name) will be moved to the macOS Trash."
+        }
         alert.addButton(withTitle: "Move to Trash")
         alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
 
         do {
             try fileService.trash(node: node)
-            if nodeContainsCurrentDocument(node) {
+            if containsCurrentDocument {
                 closeCurrentDocument()
             }
             if nodeContainsSelection(node) {

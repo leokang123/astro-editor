@@ -64,7 +64,8 @@ struct MarkdownTextView: NSViewRepresentable {
         context.coordinator.isActive = isActive
         context.coordinator.registerBodyProvider()
         context.coordinator.registerTopLineProvider()
-        context.coordinator.restoreSourceLine(targetLine)
+        textView.undoManager?.removeAllActions()
+        context.coordinator.restoreSourceLine(targetLine, for: documentID)
         return scrollView
     }
 
@@ -80,18 +81,19 @@ struct MarkdownTextView: NSViewRepresentable {
         }
 
         if context.coordinator.documentID != documentID {
-            let selectedRange = textView.selectedRange()
+            textView.undoManager?.removeAllActions()
             textView.string = text
             textView.applyMarkdownEditorStyle()
-            textView.setSelectedRange(NSRange(location: min(selectedRange.location, text.count), length: 0))
-            context.coordinator.documentID = documentID
+            textView.setSelectedRange(NSRange(location: 0, length: 0))
+            textView.undoManager?.removeAllActions()
+            context.coordinator.resetDocument(id: documentID)
             context.coordinator.isActive = isActive
             context.coordinator.registerBodyProvider()
             context.coordinator.registerTopLineProvider()
-            context.coordinator.restoreSourceLine(targetLine)
+            context.coordinator.restoreSourceLine(targetLine, for: documentID)
         } else if !context.coordinator.isActive && isActive {
-            context.coordinator.restoreSourceLine(targetLine)
-            context.coordinator.restoreSelectionAndFocus()
+            context.coordinator.restoreSourceLine(targetLine, for: documentID)
+            context.coordinator.restoreSelectionAndFocus(for: documentID)
         }
         context.coordinator.isActive = isActive
         context.coordinator.onTextChange = onTextChange
@@ -108,7 +110,7 @@ struct MarkdownTextView: NSViewRepresentable {
         if textView.window?.firstResponder === textView {
             textView.window?.makeFirstResponder(nil)
         }
-        textView.undoManager?.removeAllActions(withTarget: textView)
+        textView.undoManager?.removeAllActions()
         textView.delegate = nil
         textView.pasteCoordinator = nil
         nsView.documentView = nil
@@ -165,9 +167,14 @@ struct MarkdownTextView: NSViewRepresentable {
             savedSelectedRange = textView?.selectedRange()
         }
 
-        func restoreSelectionAndFocus() {
+        func resetDocument(id: String) {
+            documentID = id
+            savedSelectedRange = nil
+        }
+
+        func restoreSelectionAndFocus(for documentID: String) {
             DispatchQueue.main.async { [weak self, weak textView] in
-                guard let self, let textView else { return }
+                guard let self, let textView, self.documentID == documentID else { return }
                 let textLength = (textView.string as NSString).length
                 let savedRange = self.savedSelectedRange ?? textView.selectedRange()
                 let location = min(savedRange.location, textLength)
@@ -191,9 +198,9 @@ struct MarkdownTextView: NSViewRepresentable {
             }
         }
 
-        func restoreSourceLine(_ line: Int) {
-            DispatchQueue.main.async { [weak scrollView, weak textView] in
-                guard let scrollView, let textView else { return }
+        func restoreSourceLine(_ line: Int, for documentID: String) {
+            DispatchQueue.main.async { [weak self, weak scrollView, weak textView] in
+                guard let self, let scrollView, let textView, self.documentID == documentID else { return }
                 let point = textView.pointForSourceLine(line)
                 scrollView.contentView.scroll(to: point)
                 scrollView.reflectScrolledClipView(scrollView.contentView)
@@ -274,7 +281,7 @@ final class PasteAwareTextView: NSTextView {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        guard shouldDrawPlaceholder else { return }
+        guard string.isEmpty else { return }
 
         let placeholder = "Start writing Markdown..."
         let font = font ?? .monospacedSystemFont(ofSize: 14, weight: .regular)
@@ -297,10 +304,6 @@ final class PasteAwareTextView: NSTextView {
                 .foregroundColor: NSColor.placeholderTextColor,
             ]
         )
-    }
-
-    private var shouldDrawPlaceholder: Bool {
-        string.isEmpty || string == "\n"
     }
 
     override func paste(_ sender: Any?) {
