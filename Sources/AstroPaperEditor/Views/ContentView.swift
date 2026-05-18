@@ -19,10 +19,15 @@ struct ContentView: View {
                         tree: store.tree,
                         selectionID: store.selectionID,
                         selectedNode: store.selectedNode,
-                        activeSheet: $store.activeSheet,
                         onSelectNode: store.selectNode,
+                        onNewCategory: store.requestNewCategory,
+                        onNewDocument: store.requestNewDocument,
                         onRenameSelected: store.promptRenameSelected,
-                        onDeleteSelected: store.deleteSelected
+                        onRenameNode: store.promptRenameNode,
+                        onMoveSelected: store.requestMoveSelected,
+                        onMoveNode: store.requestMoveNode,
+                        onDeleteSelected: store.deleteSelected,
+                        onDeleteNode: store.deleteNode
                     )
                         .frame(minWidth: 240, idealWidth: 280, maxWidth: 360)
                 }
@@ -57,6 +62,7 @@ struct ContentView: View {
 
             Divider()
             StatusBar(
+                projectName: store.hasProject ? store.projectRoot.lastPathComponent : "No project selected",
                 projectRootPath: store.projectRoot.path,
                 isDirty: store.isDirty,
                 statusText: store.statusText
@@ -149,15 +155,23 @@ struct ContentView: View {
 }
 
 private struct StatusBar: View {
+    let projectName: String
     let projectRootPath: String
     let isDirty: Bool
     let statusText: String
 
     var body: some View {
         HStack(spacing: 12) {
-            Text(projectRootPath)
-                .lineLimit(1)
-                .truncationMode(.middle)
+            HStack(spacing: 6) {
+                Text(projectName)
+                    .fontWeight(.semibold)
+                    .lineLimit(1)
+
+                Text(projectRootPath)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
 
             Spacer()
 

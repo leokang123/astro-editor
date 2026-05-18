@@ -10,7 +10,7 @@ struct MoveSheet: View {
             Text("Move")
                 .font(.title2)
 
-            if let node = store.selectedNode {
+            if let node = store.actionNode {
                 Text(node.relativePath)
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -28,11 +28,11 @@ struct MoveSheet: View {
                 Spacer()
                 Button("Cancel") { activeSheet = nil }
                 Button("Move") {
-                    store.moveSelected(to: destinationID)
+                    store.moveActionNode(to: destinationID)
                     activeSheet = nil
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(store.selectedNode == nil)
+                .disabled(store.actionNode == nil)
             }
         }
         .padding()
@@ -43,7 +43,7 @@ struct MoveSheet: View {
     }
 
     private var filteredDestinations: [CategoryDestination] {
-        guard let node = store.selectedNode, node.kind == .category else {
+        guard let node = store.actionNode, node.kind == .category else {
             return store.categoryDestinations
         }
 

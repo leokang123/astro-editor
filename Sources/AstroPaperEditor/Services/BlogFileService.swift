@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 
 struct BlogFileService {
-    static let defaultProjectRoot = URL(fileURLWithPath: "/Users/jeonghoon/Desktop/공부목록/blog", isDirectory: true)
+    static let defaultProjectRoot = FileManager.default.homeDirectoryForCurrentUser
 
     func blogRoot(for projectRoot: URL) -> URL {
         projectRoot

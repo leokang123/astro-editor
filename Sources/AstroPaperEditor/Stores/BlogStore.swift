@@ -4,7 +4,7 @@ import Foundation
 
 @MainActor
 final class BlogStore: ObservableObject {
-    @Published var projectRoot = BlogFileService.defaultProjectRoot
+    @Published var projectRoot = BlogStore.savedProjectRoot()
     @Published var tree: [BlogNode] = []
     @Published var selectionID: String?
     @Published var currentDocument: BlogDocument?
@@ -19,6 +19,8 @@ final class BlogStore: ObservableObject {
     @Published var message: AppMessage?
     @Published var editorMode: EditorMode = .edit
     @Published var activeSheet: ActiveSheet?
+    @Published var creationParentID: String?
+    @Published var actionNodeID: String?
 
     let gitController = GitController()
 
@@ -32,6 +34,7 @@ final class BlogStore: ObservableObject {
     private let documentSession = DocumentSession()
     private var scanTask: Task<Void, Never>?
     private var buildTask: Task<Void, Never>?
+    private static let lastProjectRootKey = "lastProjectRoot"
 
     var editorTopLine: Int {
         documentSession.topLine
@@ -65,14 +68,23 @@ final class BlogStore: ObservableObject {
         gitController.canRunOperation
     }
 
+    var hasProject: Bool {
+        fileService.validateProjectRoot(projectRoot)
+    }
+
     var selectedNode: BlogNode? {
         guard let selectionID else { return nil }
         return node(withID: selectionID)
     }
 
+    var actionNode: BlogNode? {
+        guard let actionNodeID else { return nil }
+        return node(withID: actionNodeID)
+    }
+
     var categoryDestinations: [CategoryDestination] {
         var destinations = [
-            CategoryDestination(id: BlogNodeID.root, title: "src/data/blog", url: blogRoot)
+            CategoryDestination(id: BlogNodeID.root, title: "All Posts", url: blogRoot)
         ]
         appendCategories(from: tree, into: &destinations)
         return destinations
@@ -101,6 +113,7 @@ final class BlogStore: ObservableObject {
 
         if confirmDiscardOrSaveChanges() {
             projectRoot = url
+            saveProjectRoot(url)
             closeCurrentDocument()
             selectionID = nil
             rescan()
@@ -132,6 +145,7 @@ final class BlogStore: ObservableObject {
         do {
             try templateService.createProject(at: url)
             projectRoot = url
+            saveProjectRoot(url)
             closeCurrentDocument()
             selectionID = nil
             statusText = "Created AstroPaper project"
@@ -271,7 +285,13 @@ final class BlogStore: ObservableObject {
         return EditorCommandDispatcher.performTextFinderAction(.showFindInterface)
     }
 
-    func requestNewDocument() {
+    func requestNewCategory(parentID: String? = nil) {
+        creationParentID = parentID
+        activeSheet = .newCategory
+    }
+
+    func requestNewDocument(parentID: String? = nil) {
+        creationParentID = parentID
         activeSheet = .newDocument
     }
 
@@ -280,9 +300,7 @@ final class BlogStore: ObservableObject {
             let parent = categoryURL(for: parentID)
             let url = try fileService.createCategory(named: name, under: parent)
             rescan()
-            if !isDirty {
-                selectionID = BlogNodeID.make(kind: .category, relativePath: BlogFileService.relativePath(from: blogRoot, to: url))
-            }
+            selectionID = BlogNodeID.make(kind: .category, relativePath: BlogFileService.relativePath(from: blogRoot, to: url))
         } catch {
             message = AppMessage(text: error.localizedDescription)
         }
@@ -321,8 +339,19 @@ final class BlogStore: ObservableObject {
         }
     }
 
+    func creationLocationText(parentID: String?) -> String {
+        let parent = categoryURL(for: parentID)
+        let relative = BlogFileService.relativePath(from: blogRoot, to: parent)
+        return relative.isEmpty ? "All Posts" : relative
+    }
+
     func promptRenameSelected() {
-        guard let node = selectedNode else { return }
+        guard let selectionID else { return }
+        promptRenameNode(id: selectionID)
+    }
+
+    func promptRenameNode(id: String) {
+        guard let node = node(withID: id) else { return }
         guard confirmDiscardOrSaveChanges() else { return }
         let alert = NSAlert()
         alert.messageText = node.kind == .document ? "Rename Document" : "Rename Category"
@@ -347,8 +376,23 @@ final class BlogStore: ObservableObject {
         }
     }
 
-    func moveSelected(to destinationID: String) {
-        guard let node = selectedNode else { return }
+    func requestMoveSelected() {
+        guard let selectionID else { return }
+        requestMoveNode(id: selectionID)
+    }
+
+    func requestMoveNode(id: String) {
+        actionNodeID = id
+        activeSheet = .move
+    }
+
+    func moveActionNode(to destinationID: String) {
+        guard let actionNodeID else { return }
+        moveNode(id: actionNodeID, to: destinationID)
+    }
+
+    func moveNode(id: String, to destinationID: String) {
+        guard let node = node(withID: id) else { return }
         guard confirmDiscardOrSaveChanges() else { return }
         guard let destination = categoryDestinations.first(where: { $0.id == destinationID }) else { return }
 
@@ -367,13 +411,19 @@ final class BlogStore: ObservableObject {
             let relativePath = BlogFileService.relativePath(from: blogRoot, to: newURL)
             selectionID = BlogNodeID.make(kind: node.kind, relativePath: relativePath)
             updateCurrentDocumentLocation(matching: node.url, to: newURL, relativePath: relativePath, kind: node.kind)
+            actionNodeID = nil
         } catch {
             message = AppMessage(text: error.localizedDescription)
         }
     }
 
     func deleteSelected() {
-        guard let node = selectedNode else { return }
+        guard let selectionID else { return }
+        deleteNode(id: selectionID)
+    }
+
+    func deleteNode(id: String) {
+        guard let node = node(withID: id) else { return }
         guard confirmDiscardOrSaveChanges() else { return }
         let alert = NSAlert()
         alert.alertStyle = .warning
@@ -385,13 +435,38 @@ final class BlogStore: ObservableObject {
 
         do {
             try fileService.trash(node: node)
-            if currentDocument?.fileURL == node.url {
+            if nodeContainsCurrentDocument(node) {
                 closeCurrentDocument()
             }
-            selectionID = nil
+            if nodeContainsSelection(node) {
+                selectionID = nil
+            }
             rescan()
         } catch {
             message = AppMessage(text: error.localizedDescription)
+        }
+    }
+
+    private func nodeContainsCurrentDocument(_ node: BlogNode) -> Bool {
+        guard let documentURL = currentDocument?.fileURL.standardizedFileURL else { return false }
+        let nodeURL = node.url.standardizedFileURL
+        switch node.kind {
+        case .document:
+            return documentURL == nodeURL
+        case .category:
+            return documentURL.path.hasPrefix(nodeURL.path + "/")
+        }
+    }
+
+    private func nodeContainsSelection(_ node: BlogNode) -> Bool {
+        guard let selectedNode else { return false }
+        let selectedURL = selectedNode.url.standardizedFileURL
+        let nodeURL = node.url.standardizedFileURL
+        switch node.kind {
+        case .document:
+            return selectedURL == nodeURL
+        case .category:
+            return selectedURL.path.hasPrefix(nodeURL.path + "/")
         }
     }
 
@@ -588,6 +663,22 @@ final class BlogStore: ObservableObject {
     func openLocalhost() {
         buildService.openURL(BuildService.localPreviewURL)
         statusText = "Opened \(BuildService.localPreviewURL.absoluteString)"
+    }
+
+    private static func savedProjectRoot() -> URL {
+        guard let path = UserDefaults.standard.string(forKey: lastProjectRootKey) else {
+            return BlogFileService.defaultProjectRoot
+        }
+        let url = URL(fileURLWithPath: path, isDirectory: true)
+        guard BlogFileService().validateProjectRoot(url) else {
+            UserDefaults.standard.removeObject(forKey: lastProjectRootKey)
+            return BlogFileService.defaultProjectRoot
+        }
+        return url
+    }
+
+    private func saveProjectRoot(_ url: URL) {
+        UserDefaults.standard.set(url.path, forKey: Self.lastProjectRootKey)
     }
 
     func previewUnusedAssetImages() async -> AssetImageCleanupPreview? {

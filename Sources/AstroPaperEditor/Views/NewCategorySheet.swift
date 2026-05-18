@@ -15,7 +15,7 @@ struct NewCategorySheet: View {
                 Spacer()
                 Button("Cancel") { activeSheet = nil }
                 Button("Create") {
-                    store.createCategory(named: name, parentID: store.selectionID)
+                    store.createCategory(named: name, parentID: store.creationParentID)
                     activeSheet = nil
                 }
                 .keyboardShortcut(.defaultAction)

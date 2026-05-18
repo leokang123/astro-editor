@@ -4,19 +4,25 @@ struct SidebarView: View {
     let tree: [BlogNode]
     let selectionID: String?
     let selectedNode: BlogNode?
-    @Binding var activeSheet: ActiveSheet?
     var onSelectNode: (String?) -> Void
+    var onNewCategory: (String?) -> Void
+    var onNewDocument: (String?) -> Void
     var onRenameSelected: () -> Void
+    var onRenameNode: (String) -> Void
+    var onMoveSelected: () -> Void
+    var onMoveNode: (String) -> Void
     var onDeleteSelected: () -> Void
+    var onDeleteNode: (String) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             List(selection: selectionBinding) {
-                Label("src/data/blog", systemImage: "folder")
+                Label("All Posts", systemImage: "folder")
                     .tag(BlogNodeID.root)
+                    .help("Top level of src/data/blog")
                     .contextMenu {
-                        Button("New Category") { activeSheet = .newCategory }
-                        Button("New Document") { activeSheet = .newDocument }
+                        Button("New Category") { onNewCategory(nil) }
+                        Button("New Document") { onNewDocument(nil) }
                     }
 
                 Divider()
@@ -25,13 +31,13 @@ struct SidebarView: View {
                     Label(node.name, systemImage: node.systemImage)
                         .tag(node.id)
                         .contextMenu {
-                            Button("New Category") { activeSheet = .newCategory }
-                            Button("New Document") { activeSheet = .newDocument }
+                            Button("New Category") { onNewCategory(node.id) }
+                            Button("New Document") { onNewDocument(node.id) }
                             Divider()
-                            Button("Rename") { onRenameSelected() }
-                            Button("Move") { activeSheet = .move }
+                            Button("Rename") { onRenameNode(node.id) }
+                            Button("Move") { onMoveNode(node.id) }
                             Divider()
-                            Button("Delete", role: .destructive) { onDeleteSelected() }
+                            Button("Delete", role: .destructive) { onDeleteNode(node.id) }
                         }
                 }
             }
@@ -41,13 +47,13 @@ struct SidebarView: View {
 
             HStack(spacing: 8) {
                 Button {
-                    activeSheet = .newCategory
+                    onNewCategory(selectionID)
                 } label: {
                     Label("Category", systemImage: "folder.badge.plus")
                 }
 
                 Button {
-                    activeSheet = .newDocument
+                    onNewDocument(selectionID)
                 } label: {
                     Label("Document", systemImage: "doc.badge.plus")
                 }
@@ -56,7 +62,7 @@ struct SidebarView: View {
 
                 Menu {
                     Button("Rename") { onRenameSelected() }
-                    Button("Move") { activeSheet = .move }
+                    Button("Move") { onMoveSelected() }
                     Button("Delete", role: .destructive) { onDeleteSelected() }
                 } label: {
                     Image(systemName: "ellipsis.circle")

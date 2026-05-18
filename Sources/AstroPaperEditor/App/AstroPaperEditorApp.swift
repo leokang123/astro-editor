@@ -19,7 +19,7 @@ struct AstroPaperEditorApp: App {
             CommandGroup(replacing: .newItem) {
                 Button("New Document") {
                     Task { @MainActor in
-                        store.requestNewDocument()
+                        store.requestNewDocument(parentID: store.selectionID)
                     }
                 }
                 .keyboardShortcut("n", modifiers: .command)

@@ -80,7 +80,7 @@ struct NewDocumentSheet: View {
                         order: order,
                         featured: featured,
                         ogImageSourceURL: ogImageURL,
-                        parentID: store.selectionID
+                        parentID: store.creationParentID
                     )
                     activeSheet = nil
                 }
@@ -106,10 +106,6 @@ struct NewDocumentSheet: View {
     }
 
     private var locationText: String {
-        guard let selected = store.selectedNode else { return "src/data/blog" }
-        if selected.kind == .category { return selected.relativePath }
-        let parent = selected.url.deletingLastPathComponent()
-        let relative = BlogFileService.relativePath(from: store.blogRoot, to: parent)
-        return relative.isEmpty ? "src/data/blog" : relative
+        store.creationLocationText(parentID: store.creationParentID)
     }
 }
