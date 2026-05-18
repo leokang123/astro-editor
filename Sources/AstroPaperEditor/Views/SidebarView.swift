@@ -42,6 +42,10 @@ struct SidebarView: View {
                 }
             }
             .listStyle(.sidebar)
+            .contextMenu {
+                Button("New Category") { onNewCategory(nil) }
+                Button("New Document") { onNewDocument(nil) }
+            }
 
             Divider()
 
