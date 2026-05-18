@@ -19,7 +19,7 @@ struct HomeSettingsPreferencesView: View {
                     Text("Home")
                         .font(.title2)
                         .fontWeight(.semibold)
-                    Text("src/user-settings.ts")
+                    Text("src/user-settings.json")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
@@ -100,6 +100,7 @@ struct HomeSettingsPreferencesView: View {
                 textFieldRow("Website", \.website)
                 textFieldRow("Profile", \.profile)
                 textFieldRow("Posts on home", \.postPerIndex)
+                textFieldRow("Posts per page", \.postPerPage)
             }
             .padding(8)
         }
@@ -175,7 +176,7 @@ struct HomeSettingsPreferencesView: View {
             settings = loaded
             lastLoaded = loaded
             descriptionDraft = loaded.homeDescription.joined(separator: "\n")
-            message = "Loaded src/user-settings.ts"
+            message = "Loaded src/user-settings.json"
         } catch {
             message = error.localizedDescription
         }
@@ -186,7 +187,7 @@ struct HomeSettingsPreferencesView: View {
         do {
             try store.writeHomeSettings(settings)
             lastLoaded = settings
-            message = "Saved src/user-settings.ts"
+            message = "Saved src/user-settings.json"
         } catch {
             message = error.localizedDescription
         }

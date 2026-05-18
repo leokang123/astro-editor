@@ -119,7 +119,7 @@ struct AssetImageCleanupService {
             projectRoot.appendingPathComponent("src/layouts", isDirectory: true)
         ]
         let standaloneFiles = [
-            projectRoot.appendingPathComponent("src/user-settings.ts"),
+            projectRoot.appendingPathComponent("src/user-settings.json"),
             projectRoot.appendingPathComponent("src/config.ts"),
             projectRoot.appendingPathComponent("src/constants.ts")
         ]

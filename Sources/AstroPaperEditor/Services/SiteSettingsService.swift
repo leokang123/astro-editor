@@ -10,328 +10,269 @@ struct SiteSettingsService {
     func userSettingsURL(for projectRoot: URL) -> URL {
         projectRoot
             .appendingPathComponent("src", isDirectory: true)
-            .appendingPathComponent("user-settings.ts", isDirectory: false)
+            .appendingPathComponent("user-settings.json", isDirectory: false)
     }
 
     func readHomeSettings(projectRoot: URL) throws -> HomeSettings {
-        let userSettings = try String(contentsOf: userSettingsURL(for: projectRoot), encoding: .utf8)
-
-        return HomeSettings(
-            siteTitle: userSettings.tsStringValue(path: ["USER_SITE", "title"]) ?? "",
-            siteDescription: userSettings.tsStringValue(path: ["USER_SITE", "desc"]) ?? "",
-            author: userSettings.tsStringValue(path: ["USER_SITE", "author"]) ?? "",
-            website: userSettings.tsStringValue(path: ["USER_SITE", "website"]) ?? "",
-            profile: userSettings.tsStringValue(path: ["USER_SITE", "profile"]) ?? "",
-            homeTitle: userSettings.tsStringValue(path: ["USER_SITE", "home", "title"]) ?? "",
-            homeDescription: userSettings.tsStringArray(path: ["USER_SITE", "home", "description"]),
-            readMoreText: userSettings.tsStringValue(path: ["USER_SITE", "home", "readMore", "text"]) ?? "",
-            readMoreLinkText: userSettings.tsStringValue(path: ["USER_SITE", "home", "readMore", "linkText"]) ?? "",
-            readMoreHref: userSettings.tsStringValue(path: ["USER_SITE", "home", "readMore", "href"]) ?? "",
-            socialLabel: userSettings.tsStringValue(path: ["USER_SITE", "home", "socialLabel"]) ?? "",
-            allPostsText: userSettings.tsStringValue(path: ["USER_SITE", "home", "allPostsText"]) ?? "",
-            postPerIndex: userSettings.tsScalarValue(path: ["USER_SITE", "postPerIndex"]) ?? "",
-            socials: userSettings.socialLinks()
-        )
+        try ensureUserSettingsFileExists(projectRoot: projectRoot)
+        let data = try Data(contentsOf: userSettingsURL(for: projectRoot))
+        let decoded = try JSONDecoder().decode(UserSettingsFile.self, from: data)
+        return decoded.homeSettings
     }
 
     func writeHomeSettings(_ settings: HomeSettings, projectRoot: URL) throws {
-        let settingsURL = userSettingsURL(for: projectRoot)
-        var userSettings = try String(contentsOf: settingsURL, encoding: .utf8)
-
-        userSettings.replaceTSString(path: ["USER_SITE", "title"], with: settings.siteTitle)
-        userSettings.replaceTSString(path: ["USER_SITE", "desc"], with: settings.siteDescription)
-        userSettings.replaceTSString(path: ["USER_SITE", "author"], with: settings.author)
-        userSettings.replaceTSString(path: ["USER_SITE", "website"], with: settings.website)
-        userSettings.replaceTSString(path: ["USER_SITE", "profile"], with: settings.profile)
-        userSettings.replaceTSString(path: ["USER_SITE", "home", "title"], with: settings.homeTitle)
-        userSettings.replaceTSStringArray(path: ["USER_SITE", "home", "description"], with: settings.homeDescription)
-        userSettings.replaceTSString(path: ["USER_SITE", "home", "readMore", "text"], with: settings.readMoreText)
-        userSettings.replaceTSString(path: ["USER_SITE", "home", "readMore", "linkText"], with: settings.readMoreLinkText)
-        userSettings.replaceTSString(path: ["USER_SITE", "home", "readMore", "href"], with: settings.readMoreHref)
-        userSettings.replaceTSString(path: ["USER_SITE", "home", "socialLabel"], with: settings.socialLabel)
-        userSettings.replaceTSString(path: ["USER_SITE", "home", "allPostsText"], with: settings.allPostsText)
-        userSettings.replaceTSScalar(path: ["USER_SITE", "postPerIndex"], with: settings.postPerIndex)
-
-        try userSettings.write(to: settingsURL, atomically: true, encoding: .utf8)
+        try writeSettings(settings, projectRoot: projectRoot)
     }
 
     func writeSocialSettings(_ settings: HomeSettings, projectRoot: URL) throws {
-        let settingsURL = userSettingsURL(for: projectRoot)
-        var userSettings = try String(contentsOf: settingsURL, encoding: .utf8)
+        try writeSettings(settings, projectRoot: projectRoot)
+    }
 
-        for social in settings.socials {
-            userSettings.replaceSocialEnabled(name: social.name, isEnabled: social.isEnabled)
-            userSettings.replaceSocialHref(name: social.name, href: social.href)
-        }
+    private func writeSettings(_ settings: HomeSettings, projectRoot: URL) throws {
+        let file = UserSettingsFile(settings: settings)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(file)
+        try data.write(to: userSettingsURL(for: projectRoot), options: .atomic)
+    }
 
-        try userSettings.write(to: settingsURL, atomically: true, encoding: .utf8)
+    private func ensureUserSettingsFileExists(projectRoot: URL) throws {
+        let url = userSettingsURL(for: projectRoot)
+        guard !FileManager.default.fileExists(atPath: url.path) else { return }
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try writeSettings(Self.defaultSettings, projectRoot: projectRoot)
+    }
+
+    fileprivate static let defaultSettings = HomeSettings(
+        siteTitle: "AstroPaper Blog",
+        siteDescription: "Personal notes and posts",
+        author: "",
+        website: "http://localhost:4321/",
+        profile: "http://localhost:4321/about/",
+        homeTitle: "AstroPaper Blog",
+        homeDescription: ["Personal notes and posts."],
+        readMoreText: "Read the blog posts or check",
+        readMoreLinkText: "README",
+        readMoreHref: "https://github.com/satnaing/astro-paper#readme",
+        socialLabel: "Social Links:",
+        allPostsText: "All Posts",
+        postPerIndex: "4",
+        postPerPage: "4",
+        socials: [
+            SocialLinkSetting(name: "GitHub", isEnabled: false, href: ""),
+            SocialLinkSetting(name: "X", isEnabled: false, href: ""),
+            SocialLinkSetting(name: "LinkedIn", isEnabled: false, href: ""),
+            SocialLinkSetting(name: "Mail", isEnabled: false, href: "")
+        ]
+    )
+}
+
+private struct UserSettingsFile: Codable {
+    var userSite: UserSiteSettings
+    var userSocials: [UserSocialSettings]
+
+    var homeSettings: HomeSettings {
+        HomeSettings(
+            siteTitle: userSite.title,
+            siteDescription: userSite.desc,
+            author: userSite.author,
+            website: userSite.website,
+            profile: userSite.profile,
+            homeTitle: userSite.home.title,
+            homeDescription: userSite.home.description,
+            readMoreText: userSite.home.readMore.text,
+            readMoreLinkText: userSite.home.readMore.linkText,
+            readMoreHref: userSite.home.readMore.href,
+            socialLabel: userSite.home.socialLabel,
+            allPostsText: userSite.home.allPostsText,
+            postPerIndex: userSite.postPerIndex.stringValue,
+            postPerPage: userSite.postPerPage.stringValue,
+            socials: userSocials.map {
+                SocialLinkSetting(name: $0.name, isEnabled: $0.enabled, href: $0.href)
+            }
+        )
+    }
+
+    init(settings: HomeSettings) {
+        userSite = UserSiteSettings(settings: settings)
+        userSocials = settings.socials.map(UserSocialSettings.init)
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = SiteSettingsService.defaultSettings
+        userSite = try container.decodeIfPresent(UserSiteSettings.self, forKey: .userSite)
+            ?? UserSiteSettings(settings: defaults)
+        userSocials = try container.decodeIfPresent([UserSocialSettings].self, forKey: .userSocials)
+            ?? defaults.socials.map(UserSocialSettings.init)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case userSite = "USER_SITE"
+        case userSocials = "USER_SOCIALS"
     }
 }
 
-private extension String {
-    func tsStringValue(path: [String]) -> String? {
-        guard let object = objectText(path: Array(path.dropLast())) else { return nil }
-        let key = path.last ?? ""
-        let pattern = #"\b\#(NSRegularExpression.escapedPattern(for: key))\s*:\s*"((?:\\.|[^"\\])*)""#
-        guard let match = object.firstMatch(pattern: pattern), match.numberOfRanges >= 2 else { return nil }
-        return object.substring(range: match.range(at: 1))?.unescapedTSString
+private struct UserSiteSettings: Codable {
+    var website: String
+    var author: String
+    var profile: String
+    var desc: String
+    var title: String
+    var postPerIndex: FlexibleJSONScalar
+    var postPerPage: FlexibleJSONScalar
+    var home: UserHomeSettings
+
+    init(settings: HomeSettings) {
+        website = settings.website
+        author = settings.author
+        profile = settings.profile
+        desc = settings.siteDescription
+        title = settings.siteTitle
+        postPerIndex = FlexibleJSONScalar(settings.postPerIndex)
+        postPerPage = FlexibleJSONScalar(settings.postPerPage)
+        home = UserHomeSettings(settings: settings)
     }
 
-    func tsScalarValue(path: [String]) -> String? {
-        guard let object = objectText(path: Array(path.dropLast())) else { return nil }
-        let key = path.last ?? ""
-        let pattern = #"\b\#(NSRegularExpression.escapedPattern(for: key))\s*:\s*([^,\n]+)"#
-        guard let match = object.firstMatch(pattern: pattern), match.numberOfRanges >= 2 else { return nil }
-        return object.substring(range: match.range(at: 1))?.trimmingCharacters(in: .whitespacesAndNewlines)
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = UserSiteSettings(settings: SiteSettingsService.defaultSettings)
+        website = try container.decodeIfPresent(String.self, forKey: .website) ?? defaults.website
+        author = try container.decodeIfPresent(String.self, forKey: .author) ?? defaults.author
+        profile = try container.decodeIfPresent(String.self, forKey: .profile) ?? defaults.profile
+        desc = try container.decodeIfPresent(String.self, forKey: .desc) ?? defaults.desc
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? defaults.title
+        postPerIndex = try container.decodeIfPresent(FlexibleJSONScalar.self, forKey: .postPerIndex) ?? defaults.postPerIndex
+        postPerPage = try container.decodeIfPresent(FlexibleJSONScalar.self, forKey: .postPerPage) ?? defaults.postPerPage
+        home = try container.decodeIfPresent(UserHomeSettings.self, forKey: .home) ?? defaults.home
     }
 
-    func tsStringArray(path: [String]) -> [String] {
-        guard let object = objectText(path: Array(path.dropLast())) else { return [] }
-        let key = path.last ?? ""
-        let pattern = #"\b\#(NSRegularExpression.escapedPattern(for: key))\s*:\s*\[([\s\S]*?)\]"#
-        guard let match = object.firstMatch(pattern: pattern), match.numberOfRanges >= 2,
-              let body = object.substring(range: match.range(at: 1)) else {
-            return []
+    enum CodingKeys: String, CodingKey {
+        case website
+        case author
+        case profile
+        case desc
+        case title
+        case postPerIndex
+        case postPerPage
+        case home
+    }
+}
+
+private struct UserHomeSettings: Codable {
+    var title: String
+    var description: [String]
+    var readMore: UserReadMoreSettings
+    var socialLabel: String
+    var allPostsText: String
+
+    init(settings: HomeSettings) {
+        title = settings.homeTitle
+        description = settings.homeDescription
+        readMore = UserReadMoreSettings(settings: settings)
+        socialLabel = settings.socialLabel
+        allPostsText = settings.allPostsText
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = UserHomeSettings(settings: SiteSettingsService.defaultSettings)
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? defaults.title
+        description = try container.decodeIfPresent([String].self, forKey: .description) ?? defaults.description
+        readMore = try container.decodeIfPresent(UserReadMoreSettings.self, forKey: .readMore) ?? defaults.readMore
+        socialLabel = try container.decodeIfPresent(String.self, forKey: .socialLabel) ?? defaults.socialLabel
+        allPostsText = try container.decodeIfPresent(String.self, forKey: .allPostsText) ?? defaults.allPostsText
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case title
+        case description
+        case readMore
+        case socialLabel
+        case allPostsText
+    }
+}
+
+private struct UserReadMoreSettings: Codable {
+    var text: String
+    var linkText: String
+    var href: String
+
+    init(settings: HomeSettings) {
+        text = settings.readMoreText
+        linkText = settings.readMoreLinkText
+        href = settings.readMoreHref
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = UserReadMoreSettings(settings: SiteSettingsService.defaultSettings)
+        text = try container.decodeIfPresent(String.self, forKey: .text) ?? defaults.text
+        linkText = try container.decodeIfPresent(String.self, forKey: .linkText) ?? defaults.linkText
+        href = try container.decodeIfPresent(String.self, forKey: .href) ?? defaults.href
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case text
+        case linkText
+        case href
+    }
+}
+
+private struct UserSocialSettings: Codable {
+    var name: String
+    var enabled: Bool
+    var href: String
+
+    init(_ setting: SocialLinkSetting) {
+        name = setting.name
+        enabled = setting.isEnabled
+        href = setting.href
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+        href = try container.decodeIfPresent(String.self, forKey: .href) ?? ""
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case enabled
+        case href
+    }
+}
+
+private struct FlexibleJSONScalar: Codable {
+    var stringValue: String
+
+    init(_ stringValue: String) {
+        self.stringValue = stringValue
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let value = try? container.decode(String.self) {
+            stringValue = value
+        } else if let value = try? container.decode(Int.self) {
+            stringValue = String(value)
+        } else if let value = try? container.decode(Double.self) {
+            stringValue = String(value)
+        } else if let value = try? container.decode(Bool.self) {
+            stringValue = value ? "true" : "false"
+        } else {
+            stringValue = ""
         }
-        return body.matches(pattern: #""((?:\\.|[^"\\])*)""#)
-            .compactMap { body.substring(range: $0.range(at: 1))?.unescapedTSString }
     }
 
-    mutating func replaceTSString(path: [String], with value: String) {
-        guard let objectRange = objectRange(path: Array(path.dropLast())) else { return }
-        let object = String(self[objectRange])
-        let key = path.last ?? ""
-        let pattern = #"(\b\#(NSRegularExpression.escapedPattern(for: key))\s*:\s*)"((?:\\.|[^"\\])*)""#
-        guard let match = object.firstMatch(pattern: pattern), match.numberOfRanges >= 3,
-              let fullRangeInObject = Range(match.range(at: 0), in: object),
-              let prefixRange = Range(match.range(at: 1), in: object) else {
-            return
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        let trimmed = stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let value = Int(trimmed) {
+            try container.encode(value)
+        } else {
+            try container.encode(stringValue)
         }
-        let replacement = "\(object[prefixRange])\"\(value.escapedTSString)\""
-        var updatedObject = object
-        updatedObject.replaceSubrange(fullRangeInObject, with: replacement)
-        replaceSubrange(objectRange, with: updatedObject)
-    }
-
-    mutating func replaceTSScalar(path: [String], with value: String) {
-        guard let objectRange = objectRange(path: Array(path.dropLast())) else { return }
-        let object = String(self[objectRange])
-        let key = path.last ?? ""
-        let pattern = #"(\b\#(NSRegularExpression.escapedPattern(for: key))\s*:\s*)([^,\n]+)"#
-        guard let match = object.firstMatch(pattern: pattern), match.numberOfRanges >= 3,
-              let fullRangeInObject = Range(match.range(at: 0), in: object),
-              let prefixRange = Range(match.range(at: 1), in: object) else {
-            return
-        }
-        let replacement = "\(object[prefixRange])\(value.trimmingCharacters(in: .whitespacesAndNewlines))"
-        var updatedObject = object
-        updatedObject.replaceSubrange(fullRangeInObject, with: replacement)
-        replaceSubrange(objectRange, with: updatedObject)
-    }
-
-    mutating func replaceTSStringArray(path: [String], with values: [String]) {
-        guard let objectRange = objectRange(path: Array(path.dropLast())) else { return }
-        let object = String(self[objectRange])
-        let key = path.last ?? ""
-        let pattern = #"(\b\#(NSRegularExpression.escapedPattern(for: key))\s*:\s*)\[([\s\S]*?)\]"#
-        guard let match = object.firstMatch(pattern: pattern), match.numberOfRanges >= 3,
-              let fullRangeInObject = Range(match.range(at: 0), in: object),
-              let prefixRange = Range(match.range(at: 1), in: object) else {
-            return
-        }
-        let lines = values
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .map { "      \"\($0.escapedTSString)\"," }
-        let replacement = "\(object[prefixRange])[\n\(lines.joined(separator: "\n"))\n    ]"
-        var updatedObject = object
-        updatedObject.replaceSubrange(fullRangeInObject, with: replacement)
-        replaceSubrange(objectRange, with: updatedObject)
-    }
-
-    func socialLinks() -> [SocialLinkSetting] {
-        guard let socialRange = range(of: "export const USER_SOCIALS"),
-              let bracketStart = self[socialRange.upperBound...].firstIndex(of: "["),
-              let bracketRange = balancedRange(opening: bracketStart, open: "[", close: "]") else {
-            return []
-        }
-        let section = String(self[bracketRange])
-        return section.topLevelObjectTexts().compactMap { object in
-            guard let name = object.tsObjectStringValue(key: "name"),
-                  let href = object.tsObjectStringValue(key: "href") else {
-                return nil
-            }
-            let enabled = object.tsObjectBooleanValue(key: "enabled") ?? true
-            return SocialLinkSetting(name: name, isEnabled: enabled, href: href)
-        }
-    }
-
-    mutating func replaceSocialEnabled(name: String, isEnabled: Bool) {
-        guard let socialRange = range(of: "export const USER_SOCIALS"),
-              let bracketStart = self[socialRange.upperBound...].firstIndex(of: "["),
-              let bracketRange = balancedRange(opening: bracketStart, open: "[", close: "]") else {
-            return
-        }
-        let section = String(self[bracketRange])
-        let escapedName = NSRegularExpression.escapedPattern(for: name.escapedTSString)
-        let objectPattern = #"(?s)\{\s*name:\s*"\#(escapedName)"\s*,.*?\}"#
-        guard let objectMatch = section.firstMatch(pattern: objectPattern),
-              let objectRange = Range(objectMatch.range(at: 0), in: section) else {
-            return
-        }
-
-        var object = String(section[objectRange])
-        let enabledValue = isEnabled ? "true" : "false"
-        if let enabledMatch = object.firstMatch(pattern: #"\benabled:\s*(true|false)"#),
-           let enabledRange = Range(enabledMatch.range(at: 0), in: object) {
-            object.replaceSubrange(enabledRange, with: "enabled: \(enabledValue)")
-        } else if let nameMatch = object.firstMatch(pattern: #"(name:\s*"((?:\\.|[^"\\])*)"\s*,)"#),
-                  let nameLineRange = Range(nameMatch.range(at: 1), in: object) {
-            object.replaceSubrange(nameLineRange, with: "\(object[nameLineRange])\n    enabled: \(enabledValue),")
-        }
-
-        var updatedSection = section
-        updatedSection.replaceSubrange(objectRange, with: object)
-        replaceSubrange(bracketRange, with: updatedSection)
-    }
-
-    mutating func replaceSocialHref(name: String, href: String) {
-        guard let socialRange = range(of: "export const USER_SOCIALS"),
-              let bracketStart = self[socialRange.upperBound...].firstIndex(of: "["),
-              let bracketRange = balancedRange(opening: bracketStart, open: "[", close: "]") else {
-            return
-        }
-        let section = String(self[bracketRange])
-        let escapedName = NSRegularExpression.escapedPattern(for: name.escapedTSString)
-        let pattern = #"(?s)(\{\s*name:\s*"\#(escapedName)"\s*,\s*(?:enabled:\s*(?:true|false)\s*,\s*)?href:\s*)"((?:\\.|[^"\\])*)""#
-        guard let match = section.firstMatch(pattern: pattern), match.numberOfRanges >= 3,
-              let fullRangeInSection = Range(match.range(at: 0), in: section),
-              let prefixRange = Range(match.range(at: 1), in: section) else {
-            return
-        }
-        let replacement = "\(section[prefixRange])\"\(href.escapedTSString)\""
-        var updatedSection = section
-        updatedSection.replaceSubrange(fullRangeInSection, with: replacement)
-        replaceSubrange(bracketRange, with: updatedSection)
-    }
-
-    func objectText(path: [String]) -> String? {
-        guard let range = objectRange(path: path) else { return nil }
-        return String(self[range])
-    }
-
-    func objectRange(path: [String]) -> Range<String.Index>? {
-        if path.isEmpty {
-            return startIndex..<endIndex
-        }
-
-        var searchRange = startIndex..<endIndex
-        var objectRange: Range<String.Index>?
-        for key in path {
-            let pattern = #"\b\#(NSRegularExpression.escapedPattern(for: key))\s*[:=]\s*\{"#
-            guard let match = firstMatch(pattern: pattern, range: searchRange),
-                  let matchRange = Range(match.range(at: 0), in: self),
-                  let opening = self[matchRange].lastIndex(of: "{"),
-                  let range = balancedRange(opening: opening, open: "{", close: "}") else {
-                return nil
-            }
-            objectRange = range
-            searchRange = range
-        }
-        return objectRange
-    }
-
-    func balancedRange(opening: String.Index, open: Character, close: Character) -> Range<String.Index>? {
-        var depth = 0
-        var isInString = false
-        var stringQuote: Character?
-        var isEscaped = false
-        var index = opening
-
-        while index < endIndex {
-            let character = self[index]
-            if isInString {
-                if isEscaped {
-                    isEscaped = false
-                } else if character == "\\" {
-                    isEscaped = true
-                } else if character == stringQuote {
-                    isInString = false
-                    stringQuote = nil
-                }
-            } else if character == "\"" || character == "'" || character == "`" {
-                isInString = true
-                stringQuote = character
-            } else if character == open {
-                depth += 1
-            } else if character == close {
-                depth -= 1
-                if depth == 0 {
-                    return opening..<self.index(after: index)
-                }
-            }
-            index = self.index(after: index)
-        }
-        return nil
-    }
-
-    func firstMatch(pattern: String, range: Range<String.Index>? = nil) -> NSTextCheckingResult? {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
-        let searchRange = range ?? startIndex..<endIndex
-        return regex.firstMatch(in: self, range: NSRange(searchRange, in: self))
-    }
-
-    func matches(pattern: String) -> [NSTextCheckingResult] {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
-        return regex.matches(in: self, range: NSRange(startIndex..<endIndex, in: self))
-    }
-
-    func substring(range: NSRange) -> String? {
-        guard let range = Range(range, in: self) else { return nil }
-        return String(self[range])
-    }
-
-    func topLevelObjectTexts() -> [String] {
-        var objects: [String] = []
-        var index = startIndex
-        while index < endIndex {
-            guard self[index] == "{" else {
-                index = self.index(after: index)
-                continue
-            }
-            guard let range = balancedRange(opening: index, open: "{", close: "}") else {
-                break
-            }
-            objects.append(String(self[range]))
-            index = range.upperBound
-        }
-        return objects
-    }
-
-    func tsObjectStringValue(key: String) -> String? {
-        let pattern = #"\b\#(NSRegularExpression.escapedPattern(for: key))\s*:\s*"((?:\\.|[^"\\])*)""#
-        guard let match = firstMatch(pattern: pattern), match.numberOfRanges >= 2 else { return nil }
-        return substring(range: match.range(at: 1))?.unescapedTSString
-    }
-
-    func tsObjectBooleanValue(key: String) -> Bool? {
-        let pattern = #"\b\#(NSRegularExpression.escapedPattern(for: key))\s*:\s*(true|false)"#
-        guard let match = firstMatch(pattern: pattern), match.numberOfRanges >= 2,
-              let value = substring(range: match.range(at: 1)) else {
-            return nil
-        }
-        return value == "true"
-    }
-
-    var escapedTSString: String {
-        replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-            .replacingOccurrences(of: "\n", with: "\\n")
-    }
-
-    var unescapedTSString: String {
-        replacingOccurrences(of: "\\\"", with: "\"")
-            .replacingOccurrences(of: "\\n", with: "\n")
-            .replacingOccurrences(of: "\\\\", with: "\\")
     }
 }

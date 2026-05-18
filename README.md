@@ -69,44 +69,47 @@ is treated as:
 
 ## Site Settings
 
-Home and social settings are edited through a small dedicated TypeScript settings file:
+Home and social settings are edited through a small dedicated JSON settings file:
 
 ```text
-src/user-settings.ts
+src/user-settings.json
 ```
 
-`src/config.ts` should read `USER_SITE`, and `src/constants.ts` should read `USER_SOCIALS`. This keeps AstroPaper's normal config files simple while giving the macOS app one predictable file to edit.
+`src/config.ts` and `src/constants.ts` should import this JSON file directly. This keeps AstroPaper's normal config files simple while giving the macOS app one predictable data file to edit.
+If `src/user-settings.json` is missing, AstroPaperEditor creates a starter file the first time the settings are loaded.
 
 Example shape:
 
-```ts
-export const USER_SITE = {
-  website: "http://localhost:8080/",
-  author: "Jeonghoon",
-  profile: "http://localhost:8080/about/",
-  desc: "Personal technical notes",
-  title: "Home Server Notes",
-  postPerIndex: 4,
-  home: {
-    title: "Home Server Notes",
-    description: ["Study notes and project logs."],
-    readMore: {
-      text: "Read the blog posts or check",
-      linkText: "README",
-      href: "https://github.com/satnaing/astro-paper#readme",
-    },
-    socialLabel: "Social Links:",
-    allPostsText: "All Posts",
+```json
+{
+  "USER_SITE": {
+    "website": "http://localhost:8080/",
+    "author": "Jeonghoon",
+    "profile": "http://localhost:8080/about/",
+    "desc": "Personal technical notes",
+    "title": "Home Server Notes",
+    "postPerIndex": 4,
+    "postPerPage": 4,
+    "home": {
+      "title": "Home Server Notes",
+      "description": ["Study notes and project logs."],
+      "readMore": {
+        "text": "Read the blog posts or check",
+        "linkText": "README",
+        "href": "https://github.com/satnaing/astro-paper#readme"
+      },
+      "socialLabel": "Social Links:",
+      "allPostsText": "All Posts"
+    }
   },
-} as const;
-
-export const USER_SOCIALS = [
-  {
-    name: "GitHub",
-    enabled: true,
-    href: "https://github.com/username",
-  },
-] as const;
+  "USER_SOCIALS": [
+    {
+      "name": "GitHub",
+      "enabled": true,
+      "href": "https://github.com/username"
+    }
+  ]
+}
 ```
 
 ## Build And Run

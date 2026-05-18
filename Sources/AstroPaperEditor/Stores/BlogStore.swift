@@ -487,7 +487,7 @@ final class BlogStore: ObservableObject {
             let rawWebsite = try siteSettingsService.readHomeSettings(projectRoot: projectRoot).website
             let website = rawWebsite.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !website.isEmpty else {
-                message = AppMessage(text: "Website URL is empty in src/user-settings.ts.")
+                message = AppMessage(text: "Website URL is empty in src/user-settings.json.")
                 return
             }
 
@@ -567,7 +567,7 @@ final class BlogStore: ObservableObject {
 
     func writeHomeSettings(_ settings: HomeSettings) throws {
         try siteSettingsService.writeHomeSettings(settings, projectRoot: projectRoot)
-        statusText = "Saved src/user-settings.ts"
+        statusText = "Saved src/user-settings.json"
     }
 
     func writeSocialSettings(_ settings: HomeSettings) throws {

@@ -56,6 +56,7 @@ struct ProjectPreferencesView: View {
                             .truncationMode(.middle)
                             .textSelection(.enabled)
                     }
+
                 }
                 .padding(10)
             }

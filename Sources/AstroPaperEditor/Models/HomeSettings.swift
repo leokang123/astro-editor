@@ -14,6 +14,7 @@ struct HomeSettings: Equatable {
     var socialLabel: String
     var allPostsText: String
     var postPerIndex: String
+    var postPerPage: String
     var socials: [SocialLinkSetting]
 }
 

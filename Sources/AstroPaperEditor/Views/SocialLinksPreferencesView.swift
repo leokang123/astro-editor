@@ -18,7 +18,7 @@ struct SocialLinksPreferencesView: View {
                     Text("Social Links")
                         .font(.title2)
                         .fontWeight(.semibold)
-                    Text("src/user-settings.ts USER_SOCIALS")
+                    Text("src/user-settings.json USER_SOCIALS")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
@@ -68,7 +68,7 @@ struct SocialLinksPreferencesView: View {
                         .foregroundStyle(.secondary)
                     Text("No social links found")
                         .font(.headline)
-                    Text("Check src/user-settings.ts USER_SOCIALS.")
+                    Text("Check src/user-settings.json USER_SOCIALS.")
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -147,7 +147,7 @@ struct SocialLinksPreferencesView: View {
             let loaded = try store.readHomeSettings()
             settings = loaded
             lastLoaded = loaded
-            message = "Loaded src/user-settings.ts"
+            message = "Loaded src/user-settings.json"
         } catch {
             message = error.localizedDescription
         }
