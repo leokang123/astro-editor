@@ -29,6 +29,9 @@ chmod +x "$APP_BINARY"
 if [[ -f "$ICON_FILE" ]]; then
   cp "$ICON_FILE" "$APP_RESOURCES/AppIcon.icns"
 fi
+for resource in "$ROOT_DIR"/Resources/AstroPaperStarter.*; do
+  [[ -f "$resource" ]] && cp "$resource" "$APP_RESOURCES/"
+done
 
 cat >"$INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

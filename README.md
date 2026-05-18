@@ -83,9 +83,9 @@ Example shape:
 ```json
 {
   "USER_SITE": {
-    "website": "http://localhost:8080/",
+    "website": "http://localhost:4321/",
     "author": "Jeonghoon",
-    "profile": "http://localhost:8080/about/",
+    "profile": "http://localhost:4321/about/",
     "desc": "Personal technical notes",
     "title": "Home Server Notes",
     "postPerIndex": 4,

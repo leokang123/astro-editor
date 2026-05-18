@@ -26,6 +26,20 @@ struct DeveloperPreferencesView: View {
                 .disabled(store.isBuilding)
 
                 Button {
+                    store.cancelBuild()
+                } label: {
+                    Label("Cancel Build", systemImage: "xmark.circle")
+                }
+                .disabled(!store.isBuilding)
+
+                Button {
+                    store.stopDockerPreview()
+                } label: {
+                    Label(store.isStoppingPreview ? "Stopping" : "Stop Preview", systemImage: "stop.circle")
+                }
+                .disabled(store.isStoppingPreview || store.isBuilding)
+
+                Button {
                     store.openLocalhost()
                 } label: {
                     Label("Open Localhost", systemImage: "safari")
@@ -36,7 +50,10 @@ struct DeveloperPreferencesView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Runs in the selected blog project root:")
                         .foregroundStyle(.secondary)
-                    Text("docker compose up --build -d")
+                    Text("docker compose -p \(BuildService.composeProjectName) down")
+                        .font(.system(.body, design: .monospaced))
+                        .textSelection(.enabled)
+                    Text("docker compose -p \(BuildService.composeProjectName) up --build -d")
                         .font(.system(.body, design: .monospaced))
                         .textSelection(.enabled)
                     Text("Local preview URL: \(BuildService.localPreviewURL.absoluteString)")
@@ -66,7 +83,7 @@ struct DeveloperPreferencesView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Log tail")
+                    Text("Build log")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     ScrollView {

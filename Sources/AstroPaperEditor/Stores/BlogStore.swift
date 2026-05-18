@@ -12,6 +12,7 @@ final class BlogStore: ObservableObject {
     @Published var statusText = "Ready"
     @Published var buildLog = ""
     @Published var isBuilding = false
+    @Published var isStoppingPreview = false
     @Published var assetCleanupMessage = ""
     @Published var isAssetScanRunning = false
     @Published var isAssetOptimizeRunning = false
@@ -22,6 +23,7 @@ final class BlogStore: ObservableObject {
     let gitController = GitController()
 
     private let fileService = BlogFileService()
+    private let templateService = AstroPaperTemplateService()
     private let imageService = ImageService()
     private let buildService = BuildService()
     private let sitePageService = SitePageService()
@@ -29,6 +31,7 @@ final class BlogStore: ObservableObject {
     private let maxBuildLogLength = 20_000
     private let documentSession = DocumentSession()
     private var scanTask: Task<Void, Never>?
+    private var buildTask: Task<Void, Never>?
 
     var editorTopLine: Int {
         documentSession.topLine
@@ -85,13 +88,14 @@ final class BlogStore: ObservableObject {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
         panel.allowsMultipleSelection = false
         panel.directoryURL = projectRoot
         panel.message = "Choose the AstroPaper project root that contains src/data/blog."
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
         guard fileService.validateProjectRoot(url) else {
-            message = AppMessage(text: "The selected folder does not contain src/data/blog.")
+            offerProjectCreationIfPossible(at: url)
             return
         }
 
@@ -104,7 +108,41 @@ final class BlogStore: ObservableObject {
         }
     }
 
-    func rescan() {
+    private func offerProjectCreationIfPossible(at url: URL) {
+        do {
+            guard try templateService.isEmptyProjectDestination(url) else {
+                message = AppMessage(text: "The selected folder is not an AstroPaper project. It does not contain src/data/blog, and it is not empty. Choose an existing AstroPaper project root, or select an empty folder to create a new AstroPaper project.")
+                return
+            }
+        } catch {
+            message = AppMessage(text: error.localizedDescription)
+            return
+        }
+
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "Create AstroPaper project?"
+        alert.informativeText = "The selected folder is empty. Create a new AstroPaper project here using the bundled official AstroPaper template?"
+        alert.addButton(withTitle: "Create Project")
+        alert.addButton(withTitle: "Cancel")
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        guard confirmDiscardOrSaveChanges() else { return }
+
+        do {
+            try templateService.createProject(at: url)
+            projectRoot = url
+            closeCurrentDocument()
+            selectionID = nil
+            statusText = "Created AstroPaper project"
+            rescan(selectingRelativePath: "examples/welcome.md", editorMode: .preview)
+            refreshGitStatus()
+        } catch {
+            message = AppMessage(text: error.localizedDescription)
+        }
+    }
+
+    func rescan(selectingRelativePath selectedRelativePath: String? = nil, editorMode selectedEditorMode: EditorMode? = nil) {
         let root = projectRoot
         let service = fileService
         let rootPath = blogRoot.path
@@ -119,6 +157,14 @@ final class BlogStore: ObservableObject {
                 guard !Task.isCancelled, projectRoot == root else { return }
                 tree = scannedTree
                 statusText = "Scanned \(rootPath)"
+                if let selectedRelativePath,
+                   let node = scannedTree.firstNode(where: { $0.kind == .document && $0.relativePath == selectedRelativePath }) {
+                    selectionID = node.id
+                    try openDocument(node)
+                    if let selectedEditorMode {
+                        editorMode = selectedEditorMode
+                    }
+                }
             } catch is CancellationError {
                 return
             } catch {
@@ -423,7 +469,7 @@ final class BlogStore: ObservableObject {
         var pendingOutput = ""
         var lastFlush = Date.distantPast
 
-        Task {
+        buildTask = Task {
             do {
                 let status = try await buildService.runDockerCompose(at: projectRoot) { [weak self] text in
                     guard let self else { return }
@@ -437,13 +483,48 @@ final class BlogStore: ObservableObject {
                 if !pendingOutput.isEmpty {
                     appendBuildLog(pendingOutput)
                 }
+                let wasCancelled = Task.isCancelled
                 isBuilding = false
-                statusText = status == 0 ? "Docker build finished" : "Docker build exited with \(status)"
+                buildTask = nil
+                statusText = wasCancelled ? "Docker build cancelled" : (status == 0 ? "Docker build finished" : "Docker build exited with \(status)")
             } catch {
                 if !pendingOutput.isEmpty {
                     appendBuildLog(pendingOutput)
                 }
+                let wasCancelled = Task.isCancelled
                 isBuilding = false
+                buildTask = nil
+                if wasCancelled {
+                    statusText = "Docker build cancelled"
+                } else {
+                    message = AppMessage(text: error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    func cancelBuild() {
+        guard isBuilding else { return }
+        buildTask?.cancel()
+        buildService.cancelCurrentOperation()
+        statusText = "Cancelling Docker build..."
+        appendBuildLog("\nCancelling Docker build...\n")
+    }
+
+    func stopDockerPreview() {
+        guard !isStoppingPreview else { return }
+        isStoppingPreview = true
+        statusText = "Stopping Docker preview..."
+
+        Task {
+            do {
+                let status = try await buildService.stopDockerCompose(at: projectRoot) { [weak self] text in
+                    self?.appendBuildLog(text)
+                }
+                isStoppingPreview = false
+                statusText = status == 0 ? "Docker preview stopped" : "Docker stop exited with \(status)"
+            } catch {
+                isStoppingPreview = false
                 message = AppMessage(text: error.localizedDescription)
             }
         }
