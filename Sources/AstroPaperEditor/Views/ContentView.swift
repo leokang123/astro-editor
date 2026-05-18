@@ -39,6 +39,7 @@ struct ContentView: View {
                     editorTopLine: store.editorTopLine,
                     projectRoot: store.projectRoot,
                     onOpenProject: store.chooseProjectFolder,
+                    onCloseUnavailableDocument: store.closeUnavailableProjectDocument,
                     onTogglePreview: store.toggleEditorMode,
                     onTextChange: store.markBodyChanged,
                     onRegisterBodyProvider: store.setEditorBodyProvider,

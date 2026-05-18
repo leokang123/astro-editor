@@ -7,6 +7,7 @@ struct EditorView: View {
     let editorTopLine: Int
     let projectRoot: URL
     var onOpenProject: () -> Void
+    var onCloseUnavailableDocument: () -> Void
     var onTogglePreview: () -> Void
     var onTextChange: () -> Void
     var onRegisterBodyProvider: (((() -> String?)?) -> Void)
@@ -26,6 +27,14 @@ struct EditorView: View {
                             .lineLimit(1)
                             .truncationMode(.middle)
                         Spacer()
+                        if !hasProject {
+                            Button {
+                                onCloseUnavailableDocument()
+                            } label: {
+                                Label("Close", systemImage: "xmark.circle")
+                            }
+                            .help("Discard this unavailable document and return to the project picker")
+                        }
                         Button {
                             onTogglePreview()
                         } label: {

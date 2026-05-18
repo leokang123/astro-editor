@@ -60,7 +60,7 @@ final class BlogStore: ObservableObject {
     }
 
     var canSave: Bool {
-        currentDocument != nil && isDirty
+        hasProject && currentDocument != nil && isDirty
     }
 
     var canTogglePreview: Bool {
@@ -92,7 +92,6 @@ final class BlogStore: ObservableObject {
     func loadDefaultProjectIfAvailable() {
         guard tree.isEmpty, hasProject else { return }
         rescan()
-        refreshGitStatus()
     }
 
     func chooseProjectFolder() {
@@ -117,7 +116,6 @@ final class BlogStore: ObservableObject {
             closeCurrentDocument()
             selectionID = nil
             rescan()
-            refreshGitStatus()
         }
     }
 
@@ -151,13 +149,17 @@ final class BlogStore: ObservableObject {
             selectionID = nil
             statusText = "Created AstroPaper project"
             rescan(selectingRelativePath: "examples/welcome.md", editorMode: .preview)
-            refreshGitStatus()
         } catch {
             message = AppMessage(text: error.localizedDescription)
         }
     }
 
     func rescan(selectingRelativePath selectedRelativePath: String? = nil, editorMode selectedEditorMode: EditorMode? = nil) {
+        guard fileService.validateProjectRoot(projectRoot) else {
+            handleUnavailableProject()
+            return
+        }
+
         let root = projectRoot
         let service = fileService
         let rootPath = blogRoot.path
@@ -251,6 +253,10 @@ final class BlogStore: ObservableObject {
     }
 
     func saveCurrentDocument() {
+        guard hasProject else {
+            statusText = "Open a project first"
+            return
+        }
         flushSessionDraftsToCurrentDocument()
         guard var document = currentDocument else { return }
         document.frontmatter.modDatetime = DateFormatting.astropaperTimestamp.string(from: Date())
@@ -698,6 +704,13 @@ final class BlogStore: ObservableObject {
         statusText = "Opened \(BuildService.localPreviewURL.absoluteString)"
     }
 
+    func closeUnavailableProjectDocument() {
+        guard !hasProject else { return }
+        closeCurrentDocument()
+        editorMode = .edit
+        statusText = "No project selected"
+    }
+
     private static func savedProjectState() -> ProjectState {
         guard let path = UserDefaults.standard.string(forKey: lastProjectRootKey) else {
             return ProjectState(projectRoot: BlogFileService.defaultProjectRoot, hasProject: false)
@@ -712,6 +725,50 @@ final class BlogStore: ObservableObject {
 
     private func saveProjectRoot(_ url: URL) {
         UserDefaults.standard.set(url.path, forKey: Self.lastProjectRootKey)
+    }
+
+    private func clearSavedProjectRoot() {
+        UserDefaults.standard.removeObject(forKey: Self.lastProjectRootKey)
+    }
+
+    private func handleUnavailableProject() {
+        scanTask?.cancel()
+        recomputeDirtyState()
+
+        guard isDirty else {
+            enterNoProjectState(closeDocument: true)
+            return
+        }
+
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Project is no longer available"
+        alert.informativeText = "The current document has unsaved changes. Keep it open so you can copy the content, or discard it and return to the project picker."
+        alert.addButton(withTitle: "Keep Editing")
+        alert.addButton(withTitle: "Discard and Close")
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            enterNoProjectState(closeDocument: false)
+            message = AppMessage(text: "The project is no longer available. The current document is still open, but it cannot be saved until you open a project.")
+        } else {
+            enterNoProjectState(closeDocument: true)
+        }
+    }
+
+    private func enterNoProjectState(closeDocument: Bool) {
+        hasProject = false
+        clearSavedProjectRoot()
+        tree = []
+        selectionID = nil
+        creationParentID = nil
+        actionNodeID = nil
+        activeSheet = nil
+        gitController.status = .unknown
+        if closeDocument {
+            closeCurrentDocument()
+            editorMode = .edit
+        }
+        statusText = "Project is no longer available"
     }
 
     func previewUnusedAssetImages() async -> AssetImageCleanupPreview? {
