@@ -17,9 +17,10 @@ final class BuildService {
         )
         guard downStatus == 0 else { return downStatus }
 
+        let composeFileArguments = try previewComposeFileArguments(projectRoot: projectRoot)
         Task { @MainActor in onOutput("Starting Docker preview...\n") }
         let upStatus = try runDocker(
-            arguments: ["compose", "-p", Self.composeProjectName, "up", "--build", "-d"],
+            arguments: ["compose", "-p", Self.composeProjectName] + composeFileArguments + ["up", "--build", "-d"],
             at: projectRoot,
             onOutput: onOutput
         )
@@ -101,6 +102,49 @@ final class BuildService {
             Thread.sleep(forTimeInterval: 0.1)
         }
         return process.terminationStatus
+    }
+
+    private func previewComposeFileArguments(projectRoot: URL) throws -> [String] {
+        let overrideURL = try writePreviewComposeOverride()
+        return [
+            "-f",
+            projectRoot.appendingPathComponent("docker-compose.yml").path,
+            "-f",
+            overrideURL.path,
+        ]
+    }
+
+    private func writePreviewComposeOverride() throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AstroPaperEditorPreview", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let nginxURL = directory.appendingPathComponent("nginx.conf")
+        let nginxConfig = """
+        server {
+          listen 80;
+          server_name _;
+          root /usr/share/nginx/html;
+          index index.html;
+
+          absolute_redirect off;
+
+          location / {
+            try_files $uri $uri/ =404;
+          }
+        }
+        """
+        try nginxConfig.write(to: nginxURL, atomically: true, encoding: .utf8)
+
+        let overrideURL = directory.appendingPathComponent("docker-compose.preview.yml")
+        let override = """
+        services:
+          app:
+            volumes:
+              - \(nginxURL.path):/etc/nginx/conf.d/default.conf:ro
+        """
+        try override.write(to: overrideURL, atomically: true, encoding: .utf8)
+        return overrideURL
     }
 
     private func waitForPreviewReady(timeout: TimeInterval) async -> Bool {

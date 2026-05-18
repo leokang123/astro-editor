@@ -4,8 +4,8 @@ set -euo pipefail
 MODE="${1:-run}"
 APP_NAME="AstroPaperEditor"
 BUNDLE_ID="dev.jeonghoon.AstroPaperEditor"
-APP_VERSION="0.2.6"
-BUILD_NUMBER="26"
+APP_VERSION="0.3.0"
+BUILD_NUMBER="30"
 MIN_SYSTEM_VERSION="13.0"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

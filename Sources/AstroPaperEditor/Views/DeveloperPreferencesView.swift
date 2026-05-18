@@ -42,7 +42,7 @@ struct DeveloperPreferencesView: View {
                 Button {
                     store.openLocalhost()
                 } label: {
-                    Label("Open Localhost", systemImage: "safari")
+                    Label("Open Preview", systemImage: "safari")
                 }
             }
 
