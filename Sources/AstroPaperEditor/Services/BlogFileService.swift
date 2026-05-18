@@ -78,12 +78,11 @@ struct BlogFileService {
             featured: featured,
             ogImage: ogImage
         )
-        let body = "# \(title)\n"
         let document = BlogDocument(
             fileURL: target,
             relativePath: "",
             frontmatter: frontmatter,
-            body: body
+            body: ""
         )
         try writeDocument(document)
         return target

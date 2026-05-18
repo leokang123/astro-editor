@@ -7,6 +7,40 @@ struct PreviewAssets {
         tag(for: "node_modules/katex/dist/katex.min.css", kind: .stylesheet)
     }
 
+    var katexFallbackStylesheetTag: String {
+        """
+        <style>
+          .katex {
+            font-size: 1.08em;
+            line-height: 1.2;
+            text-rendering: auto;
+          }
+          .katex .katex-mathml {
+            border: 0;
+            clip: rect(1px, 1px, 1px, 1px);
+            height: 1px;
+            overflow: hidden;
+            padding: 0;
+            position: absolute;
+            width: 1px;
+          }
+          .katex-display {
+            display: block;
+            margin: 1em 0;
+            overflow-x: auto;
+            overflow-y: hidden;
+            text-align: center;
+          }
+          .katex-display > .katex {
+            display: inline-block;
+            max-width: 100%;
+            text-align: initial;
+            white-space: nowrap;
+          }
+        </style>
+        """
+    }
+
     var katexScriptTag: String {
         tag(for: "node_modules/katex/dist/katex.min.js", kind: .script)
     }
@@ -27,16 +61,19 @@ struct PreviewAssets {
 
         switch kind {
         case .stylesheet:
-            return "<link rel=\"stylesheet\" href=\"\(url.absoluteString)\">"
+            guard let stylesheet = Self.cachedText(for: url) else {
+                return fallbackTag(for: relativePath, kind: kind)
+            }
+            return "<style>\n\(stylesheet.replacingOccurrences(of: "</style>", with: "<\\/style>"))\n</style>"
         case .script:
-            guard let script = Self.cachedScript(for: url) else {
+            guard let script = Self.cachedText(for: url) else {
                 return fallbackTag(for: relativePath, kind: kind)
             }
             return "<script>\n\(script.replacingOccurrences(of: "</script>", with: "<\\/script>"))\n</script>"
         }
     }
 
-    private static func cachedScript(for url: URL) -> String? {
+    private static func cachedText(for url: URL) -> String? {
         let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
         let cacheKey = [
             url.path,

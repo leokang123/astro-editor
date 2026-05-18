@@ -14,6 +14,7 @@ struct MarkdownPreviewHTMLRenderer {
           <meta name="viewport" content="width=device-width, initial-scale=1">
           <base href="\(escapeHTML(projectBaseURLString))">
           \(assets.katexStylesheetTag)
+          \(assets.katexFallbackStylesheetTag)
           <style>
             :root {
               color-scheme: light dark;
