@@ -19,13 +19,14 @@ trap cleanup EXIT
 "$ROOT_DIR/script/package_app.sh" >/dev/null
 
 ditto --noextattr --noqtn "$APP_BUNDLE" "$STAGING_DIR/$APP_NAME.app"
+ln -s /Applications "$STAGING_DIR/Applications"
 codesign --verify --deep --strict "$STAGING_DIR/$APP_NAME.app"
 
 rm -f "$ZIP_FILE" "$DMG_FILE"
 ditto -c -k --keepParent --noextattr --noqtn "$STAGING_DIR/$APP_NAME.app" "$ZIP_FILE"
 hdiutil create \
   -volname "$APP_NAME" \
-  -srcfolder "$STAGING_DIR/$APP_NAME.app" \
+  -srcfolder "$STAGING_DIR" \
   -ov \
   -format UDZO \
   "$DMG_FILE" >/dev/null

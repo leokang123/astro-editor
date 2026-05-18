@@ -131,6 +131,10 @@ struct MarkdownPreviewView: NSViewRepresentable {
               const targetLine = \(line);
               const reveal = () => document.body.classList.add("preview-ready");
               const scrollToTargetLine = () => {
+                if (targetLine <= 1) {
+                  window.scrollTo({ top: 0 });
+                  return;
+                }
                 const elements = Array.from(document.querySelectorAll("[data-source-line]"));
                 if (!elements.length) return;
                 let best = elements[0];
