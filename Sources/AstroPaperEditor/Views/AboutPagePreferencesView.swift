@@ -45,6 +45,7 @@ struct AboutPagePreferencesView: View {
                 } label: {
                     Label("Reload", systemImage: "arrow.clockwise")
                 }
+                .disabled(!store.hasProject)
 
                 Button {
                     save()
@@ -52,25 +53,29 @@ struct AboutPagePreferencesView: View {
                     Label("Save", systemImage: "square.and.arrow.down")
                 }
                 .keyboardShortcut("s", modifiers: .command)
-                .disabled(!isDirty)
+                .disabled(!store.hasProject || !isDirty)
             }
 
-            AboutProfilePhotoSection(
-                profileImageSource: profileImageSource,
-                profileImageURL: profileImageURL,
-                onReplace: replaceProfileImage,
-                onInvalidImage: {
-                    message = "Choose a PNG, JPEG, GIF, or WebP image."
-                }
-            )
+            if !store.hasProject {
+                ProjectRequiredPlaceholder()
+            } else {
+                AboutProfilePhotoSection(
+                    profileImageSource: profileImageSource,
+                    profileImageURL: profileImageURL,
+                    onReplace: replaceProfileImage,
+                    onInvalidImage: {
+                        message = "Choose a PNG, JPEG, GIF, or WebP image."
+                    }
+                )
 
-            TextEditor(text: $draft.body)
-                .font(.system(.body, design: .monospaced))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(.separator, lineWidth: 1)
-                }
+                TextEditor(text: $draft.body)
+                    .font(.system(.body, design: .monospaced))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(.separator, lineWidth: 1)
+                    }
+            }
 
             HStack {
                 if isDirty {
@@ -89,17 +94,24 @@ struct AboutPagePreferencesView: View {
                 } label: {
                     Label("Open Website", systemImage: "safari")
                 }
+                .disabled(!store.hasProject)
             }
             .font(.caption)
         }
         .onAppear {
-            if draft.body.isEmpty, draft.frontmatter.isEmpty {
+            if store.hasProject, draft.body.isEmpty, draft.frontmatter.isEmpty {
+                reload()
+            }
+        }
+        .onChange(of: store.hasProject) { hasProject in
+            if hasProject, draft.body.isEmpty, draft.frontmatter.isEmpty {
                 reload()
             }
         }
     }
 
     private func reload() {
+        guard store.hasProject else { return }
         do {
             let page = try store.readAboutPage()
             let loadedDraft = AboutPageDraft(page: page)
@@ -112,6 +124,7 @@ struct AboutPagePreferencesView: View {
     }
 
     private func save() {
+        guard store.hasProject else { return }
         do {
             try store.writeAboutPage(draft.page)
             savedDraft = draft
@@ -122,6 +135,7 @@ struct AboutPagePreferencesView: View {
     }
 
     private func replaceProfileImage(with sourceURL: URL) {
+        guard store.hasProject else { return }
         do {
             let publicPath = try store.copyAboutProfileImage(from: sourceURL)
             draft.replaceProfileImage(with: publicPath, defaultAlt: "강정훈 프로필 사진")

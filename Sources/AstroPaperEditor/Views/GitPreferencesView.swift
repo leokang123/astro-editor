@@ -3,6 +3,7 @@ import SwiftUI
 
 struct GitPreferencesView: View {
     @ObservedObject var gitController: GitController
+    let hasProject: Bool
     let projectRoot: URL
     var onRefreshGitStatus: () -> Void
     var onConfigureGit: (String, String) -> Void
@@ -28,7 +29,7 @@ struct GitPreferencesView: View {
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
-                .disabled(gitController.isOperationRunning)
+                .disabled(!hasProject || gitController.isOperationRunning)
             }
 
             GroupBox("Status") {
@@ -36,7 +37,7 @@ struct GitPreferencesView: View {
                     GridRow {
                         Text("Project")
                             .foregroundStyle(.secondary)
-                        Text(gitController.status.projectRootPath.isEmpty ? projectRoot.path : gitController.status.projectRootPath)
+                        Text(projectPathText)
                             .lineLimit(1)
                             .truncationMode(.middle)
                             .textSelection(.enabled)
@@ -97,6 +98,7 @@ struct GitPreferencesView: View {
                             .foregroundStyle(.secondary)
                         TextField("https://github.com/user/repo.git", text: $remoteURL)
                             .textFieldStyle(.roundedBorder)
+                            .disabled(!hasProject)
                     }
 
                     GridRow {
@@ -104,6 +106,7 @@ struct GitPreferencesView: View {
                             .foregroundStyle(.secondary)
                         TextField("main", text: $branch)
                             .textFieldStyle(.roundedBorder)
+                            .disabled(!hasProject)
                     }
                 }
                 .padding(8)
@@ -115,6 +118,7 @@ struct GitPreferencesView: View {
                 } label: {
                     Label("Use Current", systemImage: "arrow.down.doc")
                 }
+                .disabled(!hasProject)
 
                 Spacer()
 
@@ -123,10 +127,12 @@ struct GitPreferencesView: View {
                 } label: {
                     Label(gitController.status.isRepository ? "Update Remote" : "Initialize Git", systemImage: "gearshape")
                 }
-                .disabled(gitController.isOperationRunning || remoteURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || branch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(!hasProject || gitController.isOperationRunning || remoteURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || branch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
 
-            if !gitController.log.isEmpty {
+            if !hasProject {
+                ProjectRequiredPlaceholder()
+            } else if !gitController.log.isEmpty {
                 ScrollView {
                     Text(gitController.log)
                         .font(.system(.caption, design: .monospaced))
@@ -140,10 +146,19 @@ struct GitPreferencesView: View {
             }
         }
         .onAppear {
-            onRefreshGitStatus()
-            loadCurrentStatusIntoFields()
+            if hasProject {
+                onRefreshGitStatus()
+                loadCurrentStatusIntoFields()
+            }
+        }
+        .onChange(of: hasProject) { hasProject in
+            if hasProject {
+                onRefreshGitStatus()
+                loadCurrentStatusIntoFields()
+            }
         }
         .onChange(of: gitController.status) { status in
+            guard hasProject else { return }
             if !status.remoteURL.isEmpty {
                 remoteURL = status.remoteURL
             }
@@ -151,6 +166,11 @@ struct GitPreferencesView: View {
                 branch = status.branch
             }
         }
+    }
+
+    private var projectPathText: String {
+        guard hasProject else { return "No project selected" }
+        return gitController.status.projectRootPath.isEmpty ? projectRoot.path : gitController.status.projectRootPath
     }
 
     private func loadCurrentStatusIntoFields() {
@@ -163,6 +183,7 @@ struct GitPreferencesView: View {
     }
 
     private var changesText: String {
+        guard hasProject else { return "Unavailable" }
         guard gitController.status.isRepository else { return "Unavailable" }
         return gitController.status.hasChanges ? "Changed files found" : "Working tree clean"
     }

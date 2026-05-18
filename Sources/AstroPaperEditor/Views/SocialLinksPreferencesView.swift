@@ -31,16 +31,19 @@ struct SocialLinksPreferencesView: View {
                 } label: {
                     Label("Reload", systemImage: "arrow.clockwise")
                 }
+                .disabled(!store.hasProject)
 
                 Button {
                     save()
                 } label: {
                     Label("Save", systemImage: "square.and.arrow.down")
                 }
-                .disabled(!isDirty || settings == nil)
+                .disabled(!store.hasProject || !isDirty || settings == nil)
             }
 
-            if let socials = settings?.socials, !socials.isEmpty {
+            if !store.hasProject {
+                ProjectRequiredPlaceholder()
+            } else if let socials = settings?.socials, !socials.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 12) {
                         Text("활성화")
@@ -93,11 +96,17 @@ struct SocialLinksPreferencesView: View {
                 } label: {
                     Label("Open Website", systemImage: "safari")
                 }
+                .disabled(!store.hasProject)
             }
             .font(.caption)
         }
         .onAppear {
-            if settings == nil {
+            if store.hasProject, settings == nil {
+                reload()
+            }
+        }
+        .onChange(of: store.hasProject) { hasProject in
+            if hasProject, settings == nil {
                 reload()
             }
         }
@@ -143,6 +152,7 @@ struct SocialLinksPreferencesView: View {
     }
 
     private func reload() {
+        guard store.hasProject else { return }
         do {
             let loaded = try store.readHomeSettings()
             settings = loaded
@@ -154,6 +164,7 @@ struct SocialLinksPreferencesView: View {
     }
 
     private func save() {
+        guard store.hasProject else { return }
         guard let settings else { return }
         do {
             try store.writeSocialSettings(settings)

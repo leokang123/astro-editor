@@ -23,7 +23,7 @@ struct DeveloperPreferencesView: View {
                 } label: {
                     Label(store.isBuilding ? "Building" : "Docker Build", systemImage: "hammer")
                 }
-                .disabled(store.isBuilding)
+                .disabled(!store.hasProject || store.isBuilding)
 
                 Button {
                     store.cancelBuild()
@@ -37,13 +37,14 @@ struct DeveloperPreferencesView: View {
                 } label: {
                     Label(store.isStoppingPreview ? "Stopping" : "Stop Preview", systemImage: "stop.circle")
                 }
-                .disabled(store.isStoppingPreview || store.isBuilding)
+                .disabled(!store.hasProject || store.isStoppingPreview || store.isBuilding)
 
                 Button {
                     store.openLocalhost()
                 } label: {
                     Label("Open Preview", systemImage: "safari")
                 }
+                .disabled(!store.hasProject)
             }
 
             GroupBox("Docker Compose") {
@@ -59,7 +60,7 @@ struct DeveloperPreferencesView: View {
                     Text("Local preview URL: \(BuildService.localPreviewURL.absoluteString)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text(store.projectRoot.path)
+                    Text(store.hasProject ? store.projectRoot.path : "No project selected")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -70,7 +71,9 @@ struct DeveloperPreferencesView: View {
                 .padding(8)
             }
 
-            if store.buildLog.isEmpty {
+            if !store.hasProject {
+                ProjectRequiredPlaceholder()
+            } else if store.buildLog.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: "hammer")
                         .font(.system(size: 34))

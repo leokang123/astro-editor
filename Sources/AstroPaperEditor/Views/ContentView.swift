@@ -125,7 +125,7 @@ struct ContentView: View {
                 } label: {
                     Label(gitController.isOperationRunning ? "Pushing" : "Commit & Push", systemImage: "paperplane")
                 }
-                .disabled(!store.hasProject || !gitController.canRunOperation)
+                .disabled(!store.canCommitAndPush)
 
                 Button {
                     store.openWebsite()

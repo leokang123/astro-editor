@@ -68,7 +68,7 @@ final class BlogStore: ObservableObject {
     }
 
     var canCommitAndPush: Bool {
-        gitController.canRunOperation
+        hasProject && gitController.canRunOperation
     }
 
     var selectedNode: BlogNode? {
@@ -690,6 +690,10 @@ final class BlogStore: ObservableObject {
     }
 
     func openLocalhost() {
+        guard hasProject else {
+            statusText = "Open a project first"
+            return
+        }
         buildService.openURL(BuildService.localPreviewURL)
         statusText = "Opened \(BuildService.localPreviewURL.absoluteString)"
     }

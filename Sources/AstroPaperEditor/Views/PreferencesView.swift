@@ -32,6 +32,7 @@ struct PreferencesView: View {
 
             GitPreferencesView(
                 gitController: store.gitController,
+                hasProject: store.hasProject,
                 projectRoot: store.projectRoot,
                 onRefreshGitStatus: store.refreshGitStatus,
                 onConfigureGit: store.configureGit
@@ -47,5 +48,21 @@ struct PreferencesView: View {
         }
         .padding(20)
         .frame(width: 760, height: 560)
+    }
+}
+
+struct ProjectRequiredPlaceholder: View {
+    var body: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "folder.badge.gearshape")
+                .font(.system(size: 34))
+                .foregroundStyle(.secondary)
+            Text("Open a project")
+                .font(.headline)
+            Text("Choose a project before using these settings.")
+                .foregroundStyle(.secondary)
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

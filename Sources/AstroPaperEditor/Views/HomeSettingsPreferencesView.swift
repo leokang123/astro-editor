@@ -32,16 +32,19 @@ struct HomeSettingsPreferencesView: View {
                 } label: {
                     Label("Reload", systemImage: "arrow.clockwise")
                 }
+                .disabled(!store.hasProject)
 
                 Button {
                     save()
                 } label: {
                     Label("Save", systemImage: "square.and.arrow.down")
                 }
-                .disabled(!isDirty || settings == nil)
+                .disabled(!store.hasProject || !isDirty || settings == nil)
             }
 
-            if settings == nil {
+            if !store.hasProject {
+                ProjectRequiredPlaceholder()
+            } else if settings == nil {
                 VStack(spacing: 10) {
                     Image(systemName: "house")
                         .font(.system(size: 34))
@@ -81,11 +84,17 @@ struct HomeSettingsPreferencesView: View {
                 } label: {
                     Label("Open Website", systemImage: "safari")
                 }
+                .disabled(!store.hasProject)
             }
             .font(.caption)
         }
         .onAppear {
-            if settings == nil {
+            if store.hasProject, settings == nil {
+                reload()
+            }
+        }
+        .onChange(of: store.hasProject) { hasProject in
+            if hasProject, settings == nil {
                 reload()
             }
         }
@@ -171,6 +180,7 @@ struct HomeSettingsPreferencesView: View {
     }
 
     private func reload() {
+        guard store.hasProject else { return }
         do {
             let loaded = try store.readHomeSettings()
             settings = loaded
@@ -183,6 +193,7 @@ struct HomeSettingsPreferencesView: View {
     }
 
     private func save() {
+        guard store.hasProject else { return }
         guard let settings else { return }
         do {
             try store.writeHomeSettings(settings)
