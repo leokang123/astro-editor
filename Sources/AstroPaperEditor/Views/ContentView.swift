@@ -18,7 +18,6 @@ struct ContentView: View {
                     SidebarView(
                         tree: store.tree,
                         selectionID: store.selectionID,
-                        selectedNode: store.selectedNode,
                         hasProject: store.hasProject,
                         onSelectNode: store.selectNode,
                         onNewCategory: store.requestNewCategory,

@@ -3,7 +3,6 @@ import SwiftUI
 struct SidebarView: View {
     let tree: [BlogNode]
     let selectionID: String?
-    let selectedNode: BlogNode?
     let hasProject: Bool
     var onSelectNode: (String?) -> Void
     var onNewCategory: (String?) -> Void
@@ -80,11 +79,15 @@ struct SidebarView: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
-                .disabled(!hasProject || selectedNode == nil || selectionID == BlogNodeID.root)
+                .disabled(!canUseSelectedNodeActions)
             }
             .labelStyle(.iconOnly)
             .padding(8)
         }
+    }
+
+    private var canUseSelectedNodeActions: Bool {
+        hasProject && selectionID != nil && selectionID != BlogNodeID.root
     }
 
     private var selectionBinding: Binding<String?> {
