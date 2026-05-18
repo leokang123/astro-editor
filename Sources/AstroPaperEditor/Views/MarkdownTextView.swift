@@ -39,7 +39,6 @@ struct MarkdownTextView: NSViewRepresentable {
         textView.autoresizingMask = [.width]
         textView.textContainer?.containerSize = NSSize(width: scrollView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
         textView.textContainer?.widthTracksTextView = true
-        textView.font = .monospacedSystemFont(ofSize: 14, weight: .regular)
         textView.isRichText = false
         textView.allowsUndo = true
         textView.isEditable = isActive
@@ -53,6 +52,7 @@ struct MarkdownTextView: NSViewRepresentable {
         textView.usesFindBar = true
         textView.isIncrementalSearchingEnabled = true
         textView.string = text
+        textView.applyMarkdownEditorStyle()
         textView.delegate = context.coordinator
         textView.pasteCoordinator = context.coordinator
         textView.registerForDraggedTypes([.fileURL, .tiff, .png])
@@ -70,6 +70,9 @@ struct MarkdownTextView: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         guard let textView = nsView.documentView as? NSTextView else { return }
+        if context.coordinator.isActive && !isActive {
+            context.coordinator.rememberSelection()
+        }
         textView.isEditable = isActive
         textView.isSelectable = isActive
         if !isActive, textView.window?.firstResponder === textView {
@@ -79,6 +82,7 @@ struct MarkdownTextView: NSViewRepresentable {
         if context.coordinator.documentID != documentID {
             let selectedRange = textView.selectedRange()
             textView.string = text
+            textView.applyMarkdownEditorStyle()
             textView.setSelectedRange(NSRange(location: min(selectedRange.location, text.count), length: 0))
             context.coordinator.documentID = documentID
             context.coordinator.isActive = isActive
@@ -87,6 +91,7 @@ struct MarkdownTextView: NSViewRepresentable {
             context.coordinator.restoreSourceLine(targetLine)
         } else if !context.coordinator.isActive && isActive {
             context.coordinator.restoreSourceLine(targetLine)
+            context.coordinator.restoreSelectionAndFocus()
         }
         context.coordinator.isActive = isActive
         context.coordinator.onTextChange = onTextChange
@@ -117,6 +122,7 @@ struct MarkdownTextView: NSViewRepresentable {
         var onInsertImages: ([PastedImage]) -> String
         var onTogglePreview: (() -> Void)?
         var isActive = true
+        var savedSelectedRange: NSRange?
         weak var scrollView: NSScrollView?
         weak var textView: NSTextView?
 
@@ -137,6 +143,7 @@ struct MarkdownTextView: NSViewRepresentable {
         }
 
         func textDidChange(_ notification: Notification) {
+            textView?.needsDisplay = true
             onTextChange()
         }
 
@@ -152,6 +159,23 @@ struct MarkdownTextView: NSViewRepresentable {
 
         func togglePreview() {
             onTogglePreview?()
+        }
+
+        func rememberSelection() {
+            savedSelectedRange = textView?.selectedRange()
+        }
+
+        func restoreSelectionAndFocus() {
+            DispatchQueue.main.async { [weak self, weak textView] in
+                guard let self, let textView else { return }
+                let textLength = (textView.string as NSString).length
+                let savedRange = self.savedSelectedRange ?? textView.selectedRange()
+                let location = min(savedRange.location, textLength)
+                let length = min(savedRange.length, max(textLength - location, 0))
+
+                textView.setSelectedRange(NSRange(location: location, length: length))
+                textView.window?.makeFirstResponder(textView)
+            }
         }
 
         func registerBodyProvider() {
@@ -179,6 +203,36 @@ struct MarkdownTextView: NSViewRepresentable {
 }
 
 private extension NSTextView {
+    func applyMarkdownEditorStyle() {
+        let editorFont = NSFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = 2
+
+        font = editorFont
+        textContainerInset = NSSize(width: 22, height: 18)
+        defaultParagraphStyle = paragraphStyle
+
+        var attributes = typingAttributes
+        attributes[.font] = editorFont
+        attributes[.paragraphStyle] = paragraphStyle
+        attributes[.foregroundColor] = NSColor.labelColor
+        typingAttributes = attributes
+
+        guard let textStorage, !string.isEmpty else {
+            needsDisplay = true
+            return
+        }
+        textStorage.addAttributes(
+            [
+                .font: editorFont,
+                .paragraphStyle: paragraphStyle,
+                .foregroundColor: NSColor.labelColor,
+            ],
+            range: NSRange(location: 0, length: textStorage.length)
+        )
+        needsDisplay = true
+    }
+
     func sourceLine(at point: NSPoint) -> Int? {
         guard let layoutManager, let textContainer else { return nil }
         let containerPoint = NSPoint(
@@ -217,6 +271,37 @@ private extension NSTextView {
 
 final class PasteAwareTextView: NSTextView {
     weak var pasteCoordinator: MarkdownTextView.Coordinator?
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard shouldDrawPlaceholder else { return }
+
+        let placeholder = "Start writing Markdown..."
+        let font = font ?? .monospacedSystemFont(ofSize: 14, weight: .regular)
+        let padding = textContainer?.lineFragmentPadding ?? 0
+        let point = NSPoint(
+            x: textContainerOrigin.x + padding,
+            y: textContainerOrigin.y
+        )
+        let rect = NSRect(
+            x: point.x,
+            y: point.y,
+            width: max(bounds.width - point.x - textContainerInset.width, 0),
+            height: font.ascender - font.descender + font.leading + 4
+        )
+
+        placeholder.draw(
+            in: rect,
+            withAttributes: [
+                .font: font,
+                .foregroundColor: NSColor.placeholderTextColor,
+            ]
+        )
+    }
+
+    private var shouldDrawPlaceholder: Bool {
+        string.isEmpty || string == "\n"
+    }
 
     override func paste(_ sender: Any?) {
         if pasteCoordinator?.insertImages(from: .general) == true {

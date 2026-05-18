@@ -316,6 +316,7 @@ private struct FrontmatterDraftEditor: View {
     }
 
     private func syncExternalFields(from frontmatter: Frontmatter) {
+        draft.modDatetime = frontmatter.modDatetime
         draft.extraLines = frontmatter.extraLines
     }
 

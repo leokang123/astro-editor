@@ -77,6 +77,24 @@ struct ProjectPreferencesView: View {
                 .disabled(!store.hasProject)
             }
 
+            GroupBox("Sidebar") {
+                Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 12) {
+                    GridRow {
+                        Text("Sort")
+                            .foregroundStyle(.secondary)
+                        Picker("Sort", selection: $store.sidebarSortOption) {
+                            ForEach(SidebarSortOption.allCases) { option in
+                                Text(option.title).tag(option)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 180, alignment: .leading)
+                        .disabled(!store.hasProject)
+                    }
+                }
+                .padding(10)
+            }
+
             Spacer()
         }
     }

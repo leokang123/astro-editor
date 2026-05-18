@@ -17,9 +17,9 @@ struct BlogFileService {
         return FileManager.default.fileExists(atPath: root.path, isDirectory: &isDirectory) && isDirectory.boolValue
     }
 
-    func scan(projectRoot: URL) throws -> [BlogNode] {
+    func scan(projectRoot: URL, sortOption: SidebarSortOption) throws -> [BlogNode] {
         let root = blogRoot(for: projectRoot)
-        return try scanDirectory(root, blogRoot: root)
+        return try scanDirectory(root, blogRoot: root, sortOption: sortOption)
     }
 
     func readDocument(at url: URL, blogRoot: URL) throws -> BlogDocument {
@@ -123,15 +123,18 @@ struct BlogFileService {
         return String(urlPath[start...]).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
     }
 
-    private func scanDirectory(_ directory: URL, blogRoot: URL) throws -> [BlogNode] {
+    private func scanDirectory(_ directory: URL, blogRoot: URL, sortOption: SidebarSortOption) throws -> [BlogNode] {
         let entries = try FileManager.default.contentsOfDirectory(
             at: directory,
-            includingPropertiesForKeys: [.isDirectoryKey],
+            includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey, .creationDateKey],
             options: [.skipsHiddenFiles]
         ).map { url in
-            (
+            let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .contentModificationDateKey, .creationDateKey])
+            return (
                 url: url,
-                isDirectory: (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+                isDirectory: values?.isDirectory ?? false,
+                modifiedDate: values?.contentModificationDate,
+                creationDate: values?.creationDate
             )
         }
 
@@ -139,7 +142,7 @@ struct BlogFileService {
             let lhsIsDirectory = lhs.isDirectory
             let rhsIsDirectory = rhs.isDirectory
             if lhsIsDirectory != rhsIsDirectory { return lhsIsDirectory }
-            return lhs.url.lastPathComponent.localizedStandardCompare(rhs.url.lastPathComponent) == .orderedAscending
+            return isSorted(lhs, before: rhs, by: sortOption)
         }
 
         return try sorted.compactMap { entry in
@@ -153,7 +156,7 @@ struct BlogFileService {
                     relativePath: relativePath,
                     url: url,
                     kind: .category,
-                    children: try scanDirectory(url, blogRoot: blogRoot)
+                    children: try scanDirectory(url, blogRoot: blogRoot, sortOption: sortOption)
                 )
             }
 
@@ -166,6 +169,44 @@ struct BlogFileService {
                 kind: .document,
                 children: []
             )
+        }
+    }
+
+    private func isSorted(
+        _ lhs: (url: URL, isDirectory: Bool, modifiedDate: Date?, creationDate: Date?),
+        before rhs: (url: URL, isDirectory: Bool, modifiedDate: Date?, creationDate: Date?),
+        by sortOption: SidebarSortOption
+    ) -> Bool {
+        switch sortOption {
+        case .fileName:
+            return isNameSorted(lhs.url, before: rhs.url)
+        case .newestModified:
+            return isDateSorted(lhs.modifiedDate, before: rhs.modifiedDate, newestFirst: true)
+                ?? isNameSorted(lhs.url, before: rhs.url)
+        case .oldestModified:
+            return isDateSorted(lhs.modifiedDate, before: rhs.modifiedDate, newestFirst: false)
+                ?? isNameSorted(lhs.url, before: rhs.url)
+        case .createdDate:
+            return isDateSorted(lhs.creationDate, before: rhs.creationDate, newestFirst: false)
+                ?? isNameSorted(lhs.url, before: rhs.url)
+        }
+    }
+
+    private func isNameSorted(_ lhs: URL, before rhs: URL) -> Bool {
+        lhs.lastPathComponent.localizedStandardCompare(rhs.lastPathComponent) == .orderedAscending
+    }
+
+    private func isDateSorted(_ lhs: Date?, before rhs: Date?, newestFirst: Bool) -> Bool? {
+        switch (lhs, rhs) {
+        case let (lhs?, rhs?):
+            guard lhs != rhs else { return nil }
+            return newestFirst ? lhs > rhs : lhs < rhs
+        case (.some, nil):
+            return true
+        case (nil, .some):
+            return false
+        case (nil, nil):
+            return nil
         }
     }
 

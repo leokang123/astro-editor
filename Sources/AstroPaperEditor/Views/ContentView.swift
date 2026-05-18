@@ -68,6 +68,7 @@ struct ContentView: View {
                 projectName: store.hasProject ? store.projectRoot.lastPathComponent : "No project selected",
                 projectRootPath: store.projectRoot.path,
                 isDirty: store.isDirty,
+                modeText: store.currentDocument == nil ? nil : (store.editorMode == .edit ? "Markdown" : "Preview"),
                 statusText: store.statusText
             )
         }
@@ -164,6 +165,7 @@ private struct StatusBar: View {
     let projectName: String
     let projectRootPath: String
     let isDirty: Bool
+    let modeText: String?
     let statusText: String
 
     var body: some View {
@@ -184,6 +186,11 @@ private struct StatusBar: View {
             if isDirty {
                 Label("Unsaved", systemImage: "circle.fill")
                     .foregroundStyle(.orange)
+            }
+
+            if let modeText {
+                Text(modeText)
+                    .foregroundStyle(.secondary)
             }
 
             Text(statusText)

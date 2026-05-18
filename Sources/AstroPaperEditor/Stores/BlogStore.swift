@@ -24,6 +24,15 @@ final class BlogStore: ObservableObject {
     @Published var activeSheet: ActiveSheet?
     @Published var creationParentID: String?
     @Published var actionNodeID: String?
+    @Published var sidebarSortOption = BlogStore.savedSidebarSortOption() {
+        didSet {
+            guard oldValue != sidebarSortOption else { return }
+            saveSidebarSortOption(sidebarSortOption)
+            if hasProject {
+                rescan()
+            }
+        }
+    }
 
     let gitController = GitController()
 
@@ -38,6 +47,7 @@ final class BlogStore: ObservableObject {
     private var scanTask: Task<Void, Never>?
     private var buildTask: Task<Void, Never>?
     private static let lastProjectRootKey = "lastProjectRoot"
+    private static let sidebarSortOptionKey = "sidebarSortOption"
 
     var editorTopLine: Int {
         documentSession.topLine
@@ -163,13 +173,14 @@ final class BlogStore: ObservableObject {
         let root = projectRoot
         let service = fileService
         let rootPath = blogRoot.path
+        let sortOption = sidebarSortOption
         scanTask?.cancel()
         statusText = "Scanning \(rootPath)"
 
         scanTask = Task {
             do {
                 let scannedTree = try await Task.detached(priority: .userInitiated) {
-                    try service.scan(projectRoot: root)
+                    try service.scan(projectRoot: root, sortOption: sortOption)
                 }.value
                 guard !Task.isCancelled, projectRoot == root else { return }
                 tree = scannedTree
@@ -723,8 +734,20 @@ final class BlogStore: ObservableObject {
         return ProjectState(projectRoot: url, hasProject: true)
     }
 
+    private static func savedSidebarSortOption() -> SidebarSortOption {
+        guard let rawValue = UserDefaults.standard.string(forKey: sidebarSortOptionKey),
+              let option = SidebarSortOption(rawValue: rawValue) else {
+            return .fileName
+        }
+        return option
+    }
+
     private func saveProjectRoot(_ url: URL) {
         UserDefaults.standard.set(url.path, forKey: Self.lastProjectRootKey)
+    }
+
+    private func saveSidebarSortOption(_ option: SidebarSortOption) {
+        UserDefaults.standard.set(option.rawValue, forKey: Self.sidebarSortOptionKey)
     }
 
     private func clearSavedProjectRoot() {
