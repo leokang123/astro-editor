@@ -19,6 +19,7 @@ struct ContentView: View {
                         tree: store.tree,
                         selectionID: store.selectionID,
                         selectedNode: store.selectedNode,
+                        hasProject: store.hasProject,
                         onSelectNode: store.selectNode,
                         onNewCategory: store.requestNewCategory,
                         onNewDocument: store.requestNewDocument,
@@ -34,9 +35,11 @@ struct ContentView: View {
 
                 EditorView(
                     document: store.currentDocument,
+                    hasProject: store.hasProject,
                     editorMode: store.editorMode,
                     editorTopLine: store.editorTopLine,
                     projectRoot: store.projectRoot,
+                    onOpenProject: store.chooseProjectFolder,
                     onTogglePreview: store.toggleEditorMode,
                     onTextChange: store.markBodyChanged,
                     onRegisterBodyProvider: store.setEditorBodyProvider,
@@ -91,6 +94,7 @@ struct ContentView: View {
                 } label: {
                     Label("Featured", systemImage: "star.fill")
                 }
+                .disabled(!store.hasProject)
 
                 Divider()
 
@@ -105,6 +109,7 @@ struct ContentView: View {
                 } label: {
                     Label("Rescan", systemImage: "arrow.clockwise")
                 }
+                .disabled(!store.hasProject)
 
                 Divider()
 
@@ -120,13 +125,14 @@ struct ContentView: View {
                 } label: {
                     Label(gitController.isOperationRunning ? "Pushing" : "Commit & Push", systemImage: "paperplane")
                 }
-                .disabled(!gitController.canRunOperation)
+                .disabled(!store.hasProject || !gitController.canRunOperation)
 
                 Button {
                     store.openWebsite()
                 } label: {
                     Label("Open Website", systemImage: "safari")
                 }
+                .disabled(!store.hasProject)
             }
         }
         .sheet(item: $store.activeSheet) { sheet in

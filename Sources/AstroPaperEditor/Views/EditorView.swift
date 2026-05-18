@@ -2,9 +2,11 @@ import SwiftUI
 
 struct EditorView: View {
     let document: BlogDocument?
+    let hasProject: Bool
     let editorMode: EditorMode
     let editorTopLine: Int
     let projectRoot: URL
+    var onOpenProject: () -> Void
     var onTogglePreview: () -> Void
     var onTextChange: () -> Void
     var onRegisterBodyProvider: (((() -> String?)?) -> Void)
@@ -73,7 +75,7 @@ struct EditorView: View {
                         .accessibilityHidden(editorMode != .edit)
                     }
                 }
-            } else {
+            } else if hasProject {
                 VStack(spacing: 12) {
                     Image(systemName: "sidebar.left")
                         .font(.system(size: 36))
@@ -83,6 +85,22 @@ struct EditorView: View {
                     Text("Documents are read only when opened.")
                         .foregroundStyle(.secondary)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "folder.badge.gearshape")
+                        .font(.system(size: 36))
+                        .foregroundStyle(.secondary)
+                    Text("Open a project")
+                        .font(.title3)
+                    Text("Open an existing AstroPaper project, or start a new one from an empty folder.")
+                        .foregroundStyle(.secondary)
+                    Button("Open Project...") {
+                        onOpenProject()
+                    }
+                    .controlSize(.large)
+                }
+                .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }

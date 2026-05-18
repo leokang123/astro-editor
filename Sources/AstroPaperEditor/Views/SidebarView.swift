@@ -4,6 +4,7 @@ struct SidebarView: View {
     let tree: [BlogNode]
     let selectionID: String?
     let selectedNode: BlogNode?
+    let hasProject: Bool
     var onSelectNode: (String?) -> Void
     var onNewCategory: (String?) -> Void
     var onNewDocument: (String?) -> Void
@@ -20,9 +21,13 @@ struct SidebarView: View {
                 Label("All Posts", systemImage: "folder")
                     .tag(BlogNodeID.root)
                     .help("Top level of src/data/blog")
+                    .foregroundStyle(hasProject ? .primary : .secondary)
+                    .disabled(!hasProject)
                     .contextMenu {
                         Button("New Category") { onNewCategory(nil) }
+                            .disabled(!hasProject)
                         Button("New Document") { onNewDocument(nil) }
+                            .disabled(!hasProject)
                     }
 
                 Divider()
@@ -44,7 +49,9 @@ struct SidebarView: View {
             .listStyle(.sidebar)
             .contextMenu {
                 Button("New Category") { onNewCategory(nil) }
+                    .disabled(!hasProject)
                 Button("New Document") { onNewDocument(nil) }
+                    .disabled(!hasProject)
             }
 
             Divider()
@@ -55,12 +62,14 @@ struct SidebarView: View {
                 } label: {
                     Label("Category", systemImage: "folder.badge.plus")
                 }
+                .disabled(!hasProject)
 
                 Button {
                     onNewDocument(selectionID)
                 } label: {
                     Label("Document", systemImage: "doc.badge.plus")
                 }
+                .disabled(!hasProject)
 
                 Spacer()
 
@@ -71,7 +80,7 @@ struct SidebarView: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
-                .disabled(selectedNode == nil || selectionID == BlogNodeID.root)
+                .disabled(!hasProject || selectedNode == nil || selectionID == BlogNodeID.root)
             }
             .labelStyle(.iconOnly)
             .padding(8)

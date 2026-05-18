@@ -4,7 +4,10 @@ import Foundation
 
 @MainActor
 final class BlogStore: ObservableObject {
-    @Published var projectRoot = BlogStore.savedProjectRoot()
+    private static let initialProjectState = BlogStore.savedProjectState()
+
+    @Published var projectRoot = BlogStore.initialProjectState.projectRoot
+    @Published private(set) var hasProject = BlogStore.initialProjectState.hasProject
     @Published var tree: [BlogNode] = []
     @Published var selectionID: String?
     @Published var currentDocument: BlogDocument?
@@ -68,10 +71,6 @@ final class BlogStore: ObservableObject {
         gitController.canRunOperation
     }
 
-    var hasProject: Bool {
-        fileService.validateProjectRoot(projectRoot)
-    }
-
     var selectedNode: BlogNode? {
         guard let selectionID else { return nil }
         return node(withID: selectionID)
@@ -91,7 +90,7 @@ final class BlogStore: ObservableObject {
     }
 
     func loadDefaultProjectIfAvailable() {
-        guard tree.isEmpty, fileService.validateProjectRoot(projectRoot) else { return }
+        guard tree.isEmpty, hasProject else { return }
         rescan()
         refreshGitStatus()
     }
@@ -113,6 +112,7 @@ final class BlogStore: ObservableObject {
 
         if confirmDiscardOrSaveChanges() {
             projectRoot = url
+            hasProject = true
             saveProjectRoot(url)
             closeCurrentDocument()
             selectionID = nil
@@ -145,6 +145,7 @@ final class BlogStore: ObservableObject {
         do {
             try templateService.createProject(at: url)
             projectRoot = url
+            hasProject = true
             saveProjectRoot(url)
             closeCurrentDocument()
             selectionID = nil
@@ -190,6 +191,7 @@ final class BlogStore: ObservableObject {
     }
 
     func selectNode(id: String?) {
+        guard hasProject else { return }
         guard selectionID != id else { return }
         guard confirmDiscardOrSaveChanges() else { return }
         selectionID = id
@@ -286,16 +288,19 @@ final class BlogStore: ObservableObject {
     }
 
     func requestNewCategory(parentID: String? = nil) {
+        guard hasProject else { return }
         creationParentID = parentID
         activeSheet = .newCategory
     }
 
     func requestNewDocument(parentID: String? = nil) {
+        guard hasProject else { return }
         creationParentID = parentID
         activeSheet = .newDocument
     }
 
     func createCategory(named name: String, parentID: String?) {
+        guard hasProject else { return }
         do {
             let parent = categoryURL(for: parentID)
             let url = try fileService.createCategory(named: name, under: parent)
@@ -315,6 +320,7 @@ final class BlogStore: ObservableObject {
         ogImageSourceURL: URL?,
         parentID: String?
     ) {
+        guard hasProject else { return }
         guard confirmDiscardOrSaveChanges() else { return }
         do {
             let parent = categoryURL(for: parentID)
@@ -346,11 +352,13 @@ final class BlogStore: ObservableObject {
     }
 
     func promptRenameSelected() {
+        guard hasProject else { return }
         guard let selectionID else { return }
         promptRenameNode(id: selectionID)
     }
 
     func promptRenameNode(id: String) {
+        guard hasProject else { return }
         guard let node = node(withID: id) else { return }
         guard confirmDiscardOrSaveChanges() else { return }
         let alert = NSAlert()
@@ -377,21 +385,25 @@ final class BlogStore: ObservableObject {
     }
 
     func requestMoveSelected() {
+        guard hasProject else { return }
         guard let selectionID else { return }
         requestMoveNode(id: selectionID)
     }
 
     func requestMoveNode(id: String) {
+        guard hasProject else { return }
         actionNodeID = id
         activeSheet = .move
     }
 
     func moveActionNode(to destinationID: String) {
+        guard hasProject else { return }
         guard let actionNodeID else { return }
         moveNode(id: actionNodeID, to: destinationID)
     }
 
     func moveNode(id: String, to destinationID: String) {
+        guard hasProject else { return }
         guard let node = node(withID: id) else { return }
         guard confirmDiscardOrSaveChanges() else { return }
         guard let destination = categoryDestinations.first(where: { $0.id == destinationID }) else { return }
@@ -418,11 +430,13 @@ final class BlogStore: ObservableObject {
     }
 
     func deleteSelected() {
+        guard hasProject else { return }
         guard let selectionID else { return }
         deleteNode(id: selectionID)
     }
 
     func deleteNode(id: String) {
+        guard hasProject else { return }
         guard let node = node(withID: id) else { return }
         guard confirmDiscardOrSaveChanges() else { return }
         let alert = NSAlert()
@@ -537,6 +551,10 @@ final class BlogStore: ObservableObject {
     }
 
     func runBuild() {
+        guard hasProject else {
+            statusText = "Open a project first"
+            return
+        }
         guard !isBuilding else { return }
         isBuilding = true
         buildLog = ""
@@ -587,6 +605,10 @@ final class BlogStore: ObservableObject {
     }
 
     func stopDockerPreview() {
+        guard hasProject else {
+            statusText = "Open a project first"
+            return
+        }
         guard !isStoppingPreview else { return }
         isStoppingPreview = true
         statusText = "Stopping Docker preview..."
@@ -613,10 +635,12 @@ final class BlogStore: ObservableObject {
     }
 
     func refreshGitStatus() {
+        guard hasProject else { return }
         gitController.refreshStatus(at: projectRoot)
     }
 
     func configureGit(remoteURL: String, branch: String) {
+        guard hasProject else { return }
         gitController.configure(
             at: projectRoot,
             remoteURL: remoteURL,
@@ -627,6 +651,7 @@ final class BlogStore: ObservableObject {
     }
 
     func commitAndPush(message commitMessage: String) {
+        guard hasProject else { return }
         guard gitController.canRunOperation else { return }
         guard confirmDiscardOrSaveChanges() else { return }
 
@@ -639,6 +664,10 @@ final class BlogStore: ObservableObject {
     }
 
     func openWebsite() {
+        guard hasProject else {
+            statusText = "Open a project first"
+            return
+        }
         do {
             let rawWebsite = try siteSettingsService.readHomeSettings(projectRoot: projectRoot).website
             let website = rawWebsite.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -665,16 +694,16 @@ final class BlogStore: ObservableObject {
         statusText = "Opened \(BuildService.localPreviewURL.absoluteString)"
     }
 
-    private static func savedProjectRoot() -> URL {
+    private static func savedProjectState() -> ProjectState {
         guard let path = UserDefaults.standard.string(forKey: lastProjectRootKey) else {
-            return BlogFileService.defaultProjectRoot
+            return ProjectState(projectRoot: BlogFileService.defaultProjectRoot, hasProject: false)
         }
         let url = URL(fileURLWithPath: path, isDirectory: true)
         guard BlogFileService().validateProjectRoot(url) else {
             UserDefaults.standard.removeObject(forKey: lastProjectRootKey)
-            return BlogFileService.defaultProjectRoot
+            return ProjectState(projectRoot: BlogFileService.defaultProjectRoot, hasProject: false)
         }
-        return url
+        return ProjectState(projectRoot: url, hasProject: true)
     }
 
     private func saveProjectRoot(_ url: URL) {
@@ -682,6 +711,7 @@ final class BlogStore: ObservableObject {
     }
 
     func previewUnusedAssetImages() async -> AssetImageCleanupPreview? {
+        guard hasProject else { return nil }
         guard !isAssetScanRunning, !isAssetOptimizeRunning else { return nil }
         isAssetScanRunning = true
         assetCleanupMessage = "Scanning assets/images..."
@@ -703,6 +733,7 @@ final class BlogStore: ObservableObject {
     }
 
     func moveAssetImagesToTrash(_ imageURLs: [URL]) async -> AssetImageCleanupResult? {
+        guard hasProject else { return nil }
         guard !isAssetScanRunning, !isAssetOptimizeRunning else { return nil }
         guard !imageURLs.isEmpty else { return AssetImageCleanupResult(trashedImages: []) }
         isAssetOptimizeRunning = true
@@ -894,6 +925,11 @@ final class BlogStore: ObservableObject {
 struct AppMessage: Identifiable {
     let id = UUID()
     var text: String
+}
+
+private struct ProjectState {
+    let projectRoot: URL
+    let hasProject: Bool
 }
 
 private extension Array where Element == BlogNode {
