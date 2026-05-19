@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct EditorView: View {
+    @State private var previewDocumentID: String?
+
     let document: BlogDocument?
     let hasProject: Bool
     let editorMode: EditorMode
@@ -19,6 +21,8 @@ struct EditorView: View {
     var body: some View {
         VStack(spacing: 0) {
             if let document {
+                let documentID = document.fileURL.path
+                let shouldMountPreview = editorMode == .preview || previewDocumentID == documentID
                 VStack(spacing: 0) {
                     HStack {
                         Image(systemName: "doc.text")
@@ -37,6 +41,9 @@ struct EditorView: View {
                             .help("Discard this unavailable document and return to the project picker")
                         }
                         Button {
+                            if editorMode == .edit {
+                                previewDocumentID = documentID
+                            }
                             onTogglePreview()
                         } label: {
                             Label(editorMode == .edit ? "Preview" : "Edit", systemImage: editorMode == .edit ? "doc.richtext" : "pencil")
@@ -52,18 +59,20 @@ struct EditorView: View {
                         Color(nsColor: .textBackgroundColor)
 
                         ZStack {
-                            MarkdownPreviewView(
-                                document: document,
-                                projectRoot: projectRoot,
-                                sourcePosition: editorSourcePosition,
-                                isActive: editorMode == .preview,
-                                onSourcePositionChange: { position in
-                                    onSourcePositionChange(position)
-                                }
-                            )
-                            .opacity(editorMode == .preview ? 1 : 0)
-                            .allowsHitTesting(editorMode == .preview)
-                            .accessibilityHidden(editorMode != .preview)
+                            if shouldMountPreview {
+                                MarkdownPreviewView(
+                                    document: document,
+                                    projectRoot: projectRoot,
+                                    sourcePosition: editorSourcePosition,
+                                    isActive: editorMode == .preview,
+                                    onSourcePositionChange: { position in
+                                        onSourcePositionChange(position)
+                                    }
+                                )
+                                .opacity(editorMode == .preview ? 1 : 0)
+                                .allowsHitTesting(editorMode == .preview)
+                                .accessibilityHidden(editorMode != .preview)
+                            }
 
                             MarkdownTextView(
                                 documentID: document.fileURL.path,
@@ -82,7 +91,12 @@ struct EditorView: View {
                                 onInsertImages: { images in
                                     onInsertImages(images)
                                 },
-                                onTogglePreview: onTogglePreview
+                                onTogglePreview: {
+                                    if editorMode == .edit {
+                                        previewDocumentID = documentID
+                                    }
+                                    onTogglePreview()
+                                }
                             )
                             .opacity(editorMode == .edit ? 1 : 0)
                             .allowsHitTesting(editorMode == .edit)
@@ -90,6 +104,14 @@ struct EditorView: View {
                         }
                         .frame(maxWidth: contentMaxWidth)
                     }
+                }
+                .onChange(of: editorMode) { mode in
+                    if mode == .preview {
+                        previewDocumentID = documentID
+                    }
+                }
+                .onChange(of: documentID) { _ in
+                    previewDocumentID = editorMode == .preview ? documentID : nil
                 }
             } else if hasProject {
                 VStack(spacing: 12) {
