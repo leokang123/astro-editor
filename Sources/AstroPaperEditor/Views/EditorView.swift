@@ -69,6 +69,10 @@ struct EditorView: View {
                                         onSourcePositionChange(position)
                                     }
                                 )
+                                .frame(
+                                    width: editorMode == .preview ? nil : 1,
+                                    height: editorMode == .preview ? nil : 1
+                                )
                                 .opacity(editorMode == .preview ? 1 : 0)
                                 .allowsHitTesting(editorMode == .preview)
                                 .accessibilityHidden(editorMode != .preview)

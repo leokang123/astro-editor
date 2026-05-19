@@ -29,6 +29,7 @@ struct MarkdownTextView: NSViewRepresentable {
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
+        scrollView.drawsBackground = false
         scrollView.findBarPosition = .aboveContent
 
         let textView = PasteAwareTextView()
@@ -49,6 +50,7 @@ struct MarkdownTextView: NSViewRepresentable {
         textView.isAutomaticSpellingCorrectionEnabled = false
         textView.isContinuousSpellCheckingEnabled = false
         textView.isGrammarCheckingEnabled = false
+        textView.drawsBackground = false
         textView.usesFindBar = true
         textView.isIncrementalSearchingEnabled = true
         textView.string = text
