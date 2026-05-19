@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ProjectPreferencesView: View {
     @ObservedObject var store: BlogStore
+    @AppStorage(EditorContentWidth.storageKey) private var editorContentWidthValue = EditorContentWidth.wide.rawValue
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -75,6 +76,23 @@ struct ProjectPreferencesView: View {
                     Label("Show in Finder", systemImage: "finder")
                 }
                 .disabled(!store.hasProject)
+            }
+
+            GroupBox("Editor") {
+                Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 12) {
+                    GridRow {
+                        Text("Content width")
+                            .foregroundStyle(.secondary)
+                        Picker("Content width", selection: $editorContentWidthValue) {
+                            ForEach(EditorContentWidth.allCases) { width in
+                                Text(width.title).tag(width.rawValue)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 180, alignment: .leading)
+                    }
+                }
+                .padding(10)
             }
 
             GroupBox("Sidebar") {

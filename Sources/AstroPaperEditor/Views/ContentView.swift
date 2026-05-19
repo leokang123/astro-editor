@@ -5,6 +5,7 @@ struct ContentView: View {
     @ObservedObject private var gitController: GitController
     @SceneStorage("showSidebar") private var showSidebar = true
     @SceneStorage("showInspector") private var showInspector = true
+    @AppStorage(EditorContentWidth.storageKey) private var editorContentWidthValue = EditorContentWidth.wide.rawValue
 
     init(store: BlogStore) {
         self.store = store
@@ -45,7 +46,8 @@ struct ContentView: View {
                     onRegisterBodyProvider: store.setEditorBodyProvider,
                     onRegisterTopLineProvider: store.setEditorTopLineProvider,
                     onInsertImages: store.insertImages,
-                    onSourceLineChange: store.updateEditorTopLine
+                    onSourceLineChange: store.updateEditorTopLine,
+                    contentMaxWidth: editorContentWidth.maxWidth
                 )
                     .frame(minWidth: 420)
 
@@ -158,6 +160,10 @@ struct ContentView: View {
         .alert(item: $store.message) { message in
             Alert(title: Text("AstroPaper Editor"), message: Text(message.text), dismissButton: .default(Text("OK")))
         }
+    }
+
+    private var editorContentWidth: EditorContentWidth {
+        EditorContentWidth(rawValue: editorContentWidthValue) ?? .wide
     }
 }
 

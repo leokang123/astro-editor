@@ -138,7 +138,7 @@ struct AboutPagePreferencesView: View {
         guard store.hasProject else { return }
         do {
             let publicPath = try store.copyAboutProfileImage(from: sourceURL)
-            draft.replaceProfileImage(with: publicPath, defaultAlt: "강정훈 프로필 사진")
+            draft.replaceProfileImage(with: publicPath, defaultAlt: "Profile photo")
             message = "Profile photo copied to public\(publicPath). Save About page to keep the new reference."
         } catch {
             message = error.localizedDescription

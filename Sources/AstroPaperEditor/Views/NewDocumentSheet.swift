@@ -7,7 +7,7 @@ struct NewDocumentSheet: View {
     @Binding var activeSheet: ActiveSheet?
     @State private var title = ""
     @State private var description = ""
-    @State private var tags = "일반"
+    @State private var tags = "general"
     @State private var order = ""
     @State private var featured = false
     @State private var ogImageURL: URL?
@@ -28,7 +28,7 @@ struct NewDocumentSheet: View {
                 Text("Tags")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                TextField("일반, 알고리즘", text: $tags)
+                TextField("general, notes", text: $tags)
                     .textFieldStyle(.roundedBorder)
             }
 

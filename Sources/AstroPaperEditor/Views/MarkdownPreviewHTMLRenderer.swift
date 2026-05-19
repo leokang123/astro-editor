@@ -41,7 +41,8 @@ struct MarkdownPreviewHTMLRenderer {
               visibility: visible;
             }
             main {
-              max-width: 860px;
+              max-width: none;
+              margin: 0 auto;
             }
             h1.title {
               font: -apple-system-large-title;

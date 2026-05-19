@@ -14,6 +14,7 @@ struct EditorView: View {
     var onRegisterTopLineProvider: (((() -> Int?)?) -> Void)
     var onInsertImages: ([PastedImage]) -> String
     var onSourceLineChange: (Int) -> Void
+    let contentMaxWidth: CGFloat
 
     var body: some View {
         VStack(spacing: 0) {
@@ -48,40 +49,45 @@ struct EditorView: View {
                     .background(.bar)
 
                     ZStack {
-                        MarkdownPreviewView(
-                            document: document,
-                            projectRoot: projectRoot,
-                            sourceLine: editorTopLine,
-                            onSourceLineChange: { line in
-                                onSourceLineChange(line)
-                            }
-                        )
-                        .opacity(editorMode == .preview ? 1 : 0)
-                        .allowsHitTesting(editorMode == .preview)
-                        .accessibilityHidden(editorMode != .preview)
+                        Color(nsColor: .textBackgroundColor)
 
-                        MarkdownTextView(
-                            documentID: document.fileURL.path,
-                            text: document.body,
-                            targetLine: editorTopLine,
-                            isActive: editorMode == .edit,
-                            onTextChange: {
-                                onTextChange()
-                            },
-                            onRegisterBodyProvider: { provider in
-                                onRegisterBodyProvider(provider)
-                            },
-                            onRegisterTopLineProvider: { provider in
-                                onRegisterTopLineProvider(provider)
-                            },
-                            onInsertImages: { images in
-                                onInsertImages(images)
-                            },
-                            onTogglePreview: onTogglePreview
-                        )
-                        .opacity(editorMode == .edit ? 1 : 0)
-                        .allowsHitTesting(editorMode == .edit)
-                        .accessibilityHidden(editorMode != .edit)
+                        ZStack {
+                            MarkdownPreviewView(
+                                document: document,
+                                projectRoot: projectRoot,
+                                sourceLine: editorTopLine,
+                                onSourceLineChange: { line in
+                                    onSourceLineChange(line)
+                                }
+                            )
+                            .opacity(editorMode == .preview ? 1 : 0)
+                            .allowsHitTesting(editorMode == .preview)
+                            .accessibilityHidden(editorMode != .preview)
+
+                            MarkdownTextView(
+                                documentID: document.fileURL.path,
+                                text: document.body,
+                                targetLine: editorTopLine,
+                                isActive: editorMode == .edit,
+                                onTextChange: {
+                                    onTextChange()
+                                },
+                                onRegisterBodyProvider: { provider in
+                                    onRegisterBodyProvider(provider)
+                                },
+                                onRegisterTopLineProvider: { provider in
+                                    onRegisterTopLineProvider(provider)
+                                },
+                                onInsertImages: { images in
+                                    onInsertImages(images)
+                                },
+                                onTogglePreview: onTogglePreview
+                            )
+                            .opacity(editorMode == .edit ? 1 : 0)
+                            .allowsHitTesting(editorMode == .edit)
+                            .accessibilityHidden(editorMode != .edit)
+                        }
+                        .frame(maxWidth: contentMaxWidth)
                     }
                 }
             } else if hasProject {

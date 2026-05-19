@@ -46,9 +46,9 @@ struct SocialLinksPreferencesView: View {
             } else if let socials = settings?.socials, !socials.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 12) {
-                        Text("활성화")
+                        Text("Enabled")
                             .frame(width: 86, alignment: .leading)
-                        Text("서비스")
+                        Text("Service")
                             .frame(width: 118, alignment: .leading)
                         Text("URL")
                         Spacer()
@@ -121,7 +121,7 @@ struct SocialLinksPreferencesView: View {
                         updateSettings { $0.socials[index].isEnabled = value }
                     }
                 )) {
-                    Text("활성화")
+                    Text("Enabled")
                 }
                 .toggleStyle(.checkbox)
                 .frame(width: 86, alignment: .leading)
@@ -193,15 +193,15 @@ struct SocialLinksPreferencesView: View {
     private func help(for name: String) -> String {
         switch name {
         case "GitHub":
-            return "GitHub 프로필 또는 저장소 주소"
+            return "GitHub profile or repository URL"
         case "X":
-            return "X/Twitter 프로필 주소"
+            return "X/Twitter profile URL"
         case "LinkedIn":
-            return "LinkedIn 프로필 주소"
+            return "LinkedIn profile URL"
         case "Mail":
-            return "메일 링크입니다. mailto:name@example.com 형식 권장"
+            return "Mail link. mailto:name@example.com is recommended"
         default:
-            return "홈 화면 소셜 아이콘 링크"
+            return "Home page social icon URL"
         }
     }
 }

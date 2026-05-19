@@ -180,7 +180,7 @@ struct Frontmatter: Equatable {
         lines.append("tags:")
 
         if tags.isEmpty {
-            lines.append("  - 일반")
+            lines.append("  - general")
         } else {
             lines.append(contentsOf: tags.map { "  - \(Self.escape($0))" })
         }
