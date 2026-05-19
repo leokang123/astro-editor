@@ -70,6 +70,7 @@ struct MarkdownTextView: NSViewRepresentable {
         context.coordinator.registerSourcePositionProvider()
         textView.undoManager?.removeAllActions()
         context.coordinator.restoreSourcePosition(targetSourcePosition, for: documentID)
+        context.coordinator.clearFocus(for: documentID)
         return scrollView
     }
 
@@ -96,6 +97,7 @@ struct MarkdownTextView: NSViewRepresentable {
             context.coordinator.registerBodyProvider()
             context.coordinator.registerSourcePositionProvider()
             context.coordinator.restoreSourcePosition(targetSourcePosition, for: documentID)
+            context.coordinator.clearFocus(for: documentID)
         } else if !context.coordinator.isActive && isActive {
             context.coordinator.restoreSourcePosition(targetSourcePosition, for: documentID)
             context.coordinator.restoreSelectionAndFocus(for: documentID)
@@ -191,6 +193,14 @@ struct MarkdownTextView: NSViewRepresentable {
 
                 textView.setSelectedRange(NSRange(location: location, length: length))
                 textView.window?.makeFirstResponder(textView)
+            }
+        }
+
+        func clearFocus(for documentID: String) {
+            DispatchQueue.main.async { [weak self, weak textView] in
+                guard let self, let textView, self.documentID == documentID else { return }
+                guard textView.window?.firstResponder === textView else { return }
+                textView.window?.makeFirstResponder(nil)
             }
         }
 
@@ -387,6 +397,13 @@ final class PasteAwareTextView: NSTextView {
     }
 
     override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53,
+           event.modifierFlags.intersection([.command, .shift, .option, .control]).isEmpty,
+           !hasMarkedText() {
+            window?.makeFirstResponder(nil)
+            return
+        }
+
         if performEditorShortcut(event) {
             return
         }

@@ -84,6 +84,10 @@ struct SidebarView: View {
             .labelStyle(.iconOnly)
             .padding(8)
         }
+        .onExitCommand {
+            guard hasProject, selectionID != BlogNodeID.root else { return }
+            onSelectNode(BlogNodeID.root)
+        }
     }
 
     private var canUseSelectedNodeActions: Bool {
