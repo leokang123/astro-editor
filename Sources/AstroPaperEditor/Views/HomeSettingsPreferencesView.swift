@@ -101,31 +101,41 @@ struct HomeSettingsPreferencesView: View {
     }
 
     private var siteSection: some View {
-        GroupBox("Site") {
-            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
-                textFieldRow("Site title", \.siteTitle)
-                textFieldRow("Description", \.siteDescription)
-                textFieldRow("Author", \.author)
-                textFieldRow("Website", \.website)
-                textFieldRow("Profile", \.profile)
-                textFieldRow("Posts on home", \.postPerIndex)
-                textFieldRow("Posts per page", \.postPerPage)
+        GroupBox("Website Info") {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Basic information used across the whole site, plus how many posts are shown in each list.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
+                    textFieldRow("Site title", \.siteTitle)
+                    textFieldRow("Description", \.siteDescription)
+                    textFieldRow("Author", \.author)
+                    textFieldRow("Website", \.website)
+                    textFieldRow("Profile", \.profile)
+                    textFieldRow("Posts on home", \.postPerIndex)
+                    textFieldRow("Posts per page", \.postPerPage)
+                }
             }
             .padding(8)
         }
     }
 
     private var heroSection: some View {
-        GroupBox("Home Hero") {
+        GroupBox("Home Page Header") {
             VStack(alignment: .leading, spacing: 10) {
+                Text("Text shown at the top of the home page before the post list.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
-                    textFieldRow("Hero title", \.homeTitle)
+                    textFieldRow("Header title", \.homeTitle)
                     textFieldRow("Social label", \.socialLabel)
                     textFieldRow("All posts", \.allPostsText)
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Hero description")
+                    Text("Header description")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     TextEditor(text: Binding(
