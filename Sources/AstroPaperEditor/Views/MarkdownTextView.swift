@@ -24,13 +24,14 @@ struct MarkdownTextView: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSScrollView()
+        let scrollView = EditorScrollView()
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
         scrollView.drawsBackground = false
         scrollView.findBarPosition = .aboveContent
+        scrollView.isEditorActive = isActive
 
         let textView = PasteAwareTextView()
         textView.minSize = NSSize(width: 0, height: 0)
@@ -40,6 +41,7 @@ struct MarkdownTextView: NSViewRepresentable {
         textView.autoresizingMask = [.width]
         textView.textContainer?.containerSize = NSSize(width: scrollView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
         textView.textContainer?.widthTracksTextView = true
+        textView.layoutManager?.allowsNonContiguousLayout = true
         textView.isRichText = false
         textView.allowsUndo = true
         textView.isEditable = isActive
@@ -78,6 +80,7 @@ struct MarkdownTextView: NSViewRepresentable {
         }
         textView.isEditable = isActive
         textView.isSelectable = isActive
+        (nsView as? EditorScrollView)?.isEditorActive = isActive
         if !isActive, textView.window?.firstResponder === textView {
             textView.window?.makeFirstResponder(nil)
         }
@@ -215,6 +218,15 @@ struct MarkdownTextView: NSViewRepresentable {
     }
 }
 
+final class EditorScrollView: NSScrollView {
+    var isEditorActive = true
+
+    override func scrollWheel(with event: NSEvent) {
+        guard isEditorActive else { return }
+        super.scrollWheel(with: event)
+    }
+}
+
 private extension NSTextView {
     func applyMarkdownEditorStyle() {
         let editorFont = NSFont.monospacedSystemFont(ofSize: 14, weight: .regular)
@@ -231,18 +243,6 @@ private extension NSTextView {
         attributes[.foregroundColor] = NSColor.labelColor
         typingAttributes = attributes
 
-        guard let textStorage, !string.isEmpty else {
-            needsDisplay = true
-            return
-        }
-        textStorage.addAttributes(
-            [
-                .font: editorFont,
-                .paragraphStyle: paragraphStyle,
-                .foregroundColor: NSColor.labelColor,
-            ],
-            range: NSRange(location: 0, length: textStorage.length)
-        )
         needsDisplay = true
     }
 
