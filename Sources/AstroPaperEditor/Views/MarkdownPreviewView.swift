@@ -6,6 +6,7 @@ struct MarkdownPreviewView: NSViewRepresentable {
     let document: BlogDocument
     let projectRoot: URL
     let sourcePosition: Double
+    let isActive: Bool
     var onSourcePositionChange: (Double) -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -30,8 +31,10 @@ struct MarkdownPreviewView: NSViewRepresentable {
     func updateNSView(_ webView: WKWebView, context: Context) {
         let previousSourcePosition = context.coordinator.sourcePosition
         context.coordinator.sourcePosition = sourcePosition
+        context.coordinator.isActive = isActive
         context.coordinator.onSourcePositionChange = onSourcePositionChange
         context.coordinator.resourceSchemeHandler.projectRoot = projectRoot.standardizedFileURL
+        context.coordinator.setPreviewActive(isActive, in: webView)
         let metadataKey = [
             document.fileURL.path,
             document.frontmatter.title,
@@ -64,6 +67,12 @@ struct MarkdownPreviewView: NSViewRepresentable {
       var scheduled = false;
       var lastReportTime = 0;
       var pendingReportTimer = 0;
+      var resizeReportTimer = 0;
+      var isActive = false;
+      var isRestoring = false;
+      var isResizing = false;
+      var restoreToken = 0;
+      const canReport = () => isActive && !isRestoring && !isResizing;
       window.astroPaperScrollSync = (() => {
         var cachedMarkers = null;
         const clampedProgress = value => Math.max(0, Math.min(1, value));
@@ -138,17 +147,34 @@ struct MarkdownPreviewView: NSViewRepresentable {
           }
           window.scrollTo({ top });
         };
-        return { sourcePositionForPageOffset, scrollToSourcePosition };
+        const setActive = active => {
+          isActive = Boolean(active);
+        };
+        const beginRestore = () => {
+          isRestoring = true;
+          restoreToken += 1;
+          return restoreToken;
+        };
+        const endRestore = () => {
+          if (isRestoring) {
+            isRestoring = false;
+            restoreToken += 1;
+          }
+        };
+        const isRestoreTokenActive = token => isRestoring && token === restoreToken;
+        return { sourcePositionForPageOffset, scrollToSourcePosition, setActive, beginRestore, endRestore, isRestoreTokenActive };
       })();
       const report = () => {
         scheduled = false;
         lastReportTime = Date.now();
+        if (!canReport()) return;
         const position = window.astroPaperScrollSync.sourcePositionForPageOffset(window.scrollY);
         if (position !== null) {
           window.webkit.messageHandlers.sourcePosition.postMessage(position);
         }
       };
       const scheduleReport = () => {
+        if (!canReport()) return;
         if (scheduled) return;
         const elapsed = Date.now() - lastReportTime;
         scheduled = true;
@@ -162,6 +188,21 @@ struct MarkdownPreviewView: NSViewRepresentable {
       window.addEventListener("scroll", () => {
         scheduleReport();
       }, { passive: true });
+      const finishUserRestore = () => {
+        if (isRestoring) {
+          window.astroPaperScrollSync.endRestore();
+        }
+      };
+      window.addEventListener("wheel", finishUserRestore, { passive: true });
+      window.addEventListener("keydown", finishUserRestore);
+      window.addEventListener("resize", () => {
+        isResizing = true;
+        window.clearTimeout(resizeReportTimer);
+        resizeReportTimer = window.setTimeout(() => {
+          isResizing = false;
+          scheduleReport();
+        }, 120);
+      }, { passive: true });
     })();
     """
 
@@ -169,6 +210,7 @@ struct MarkdownPreviewView: NSViewRepresentable {
         var metadataKey = ""
         var body = ""
         var sourcePosition = 1.0
+        var isActive = false
         var reportedSourcePosition: Double?
         var onSourcePositionChange: (Double) -> Void
         let resourceSchemeHandler = PreviewResourceSchemeHandler()
@@ -205,7 +247,13 @@ struct MarkdownPreviewView: NSViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            setPreviewActive(isActive, in: webView)
             scrollToSourcePosition(in: webView)
+        }
+
+        func setPreviewActive(_ isActive: Bool, in webView: WKWebView) {
+            let script = "window.astroPaperScrollSync?.setActive(\(isActive ? "true" : "false"));"
+            webView.evaluateJavaScript(script)
         }
 
         func scrollToSourcePosition(in webView: WKWebView) {
@@ -213,7 +261,10 @@ struct MarkdownPreviewView: NSViewRepresentable {
             let script = """
             (() => {
               const targetPosition = \(position);
+              const scrollSync = window.astroPaperScrollSync;
               const reveal = () => document.body.classList.add("preview-ready");
+              const restoreToken = scrollSync?.beginRestore();
+              const shouldRestore = () => scrollSync?.isRestoreTokenActive(restoreToken) !== false;
               const waitForImages = () => {
                 const images = Array.from(document.images).filter(image => !image.complete);
                 if (!images.length) return Promise.resolve();
@@ -231,7 +282,8 @@ struct MarkdownPreviewView: NSViewRepresentable {
                 });
               };
               const scrollToTargetPosition = () => {
-                window.astroPaperScrollSync?.scrollToSourcePosition(targetPosition);
+                if (!shouldRestore()) return;
+                scrollSync?.scrollToSourcePosition(targetPosition);
               };
               Promise.resolve(window.previewEnhancementsReady)
                 .catch(() => {})
@@ -243,6 +295,7 @@ struct MarkdownPreviewView: NSViewRepresentable {
                     scrollToTargetPosition();
                     window.setTimeout(() => {
                       scrollToTargetPosition();
+                      scrollSync?.endRestore();
                       reveal();
                     }, 120);
                   });

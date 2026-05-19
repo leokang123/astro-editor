@@ -56,6 +56,7 @@ struct EditorView: View {
                                 document: document,
                                 projectRoot: projectRoot,
                                 sourcePosition: editorSourcePosition,
+                                isActive: editorMode == .preview,
                                 onSourcePositionChange: { position in
                                     onSourcePositionChange(position)
                                 }

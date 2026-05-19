@@ -243,6 +243,7 @@ final class BlogStore: ObservableObject {
     }
 
     func updateEditorSourcePosition(_ position: Double) {
+        guard abs(editorSourcePosition - position) >= 0.0001 else { return }
         documentSession.updateSourcePosition(position)
     }
 
