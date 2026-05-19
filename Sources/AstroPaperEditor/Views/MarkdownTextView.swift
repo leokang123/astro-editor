@@ -4,11 +4,11 @@ import SwiftUI
 struct MarkdownTextView: NSViewRepresentable {
     let documentID: String
     let text: String
-    let targetLine: Int
+    let targetSourcePosition: Double
     let isActive: Bool
     var onTextChange: () -> Void
     var onRegisterBodyProvider: (((() -> String?)?) -> Void)
-    var onRegisterTopLineProvider: (((() -> Int?)?) -> Void)
+    var onRegisterSourcePositionProvider: (((() -> Double?)?) -> Void)
     var onInsertImages: ([PastedImage]) -> String
     var onTogglePreview: (() -> Void)?
 
@@ -17,7 +17,7 @@ struct MarkdownTextView: NSViewRepresentable {
             documentID: documentID,
             onTextChange: onTextChange,
             onRegisterBodyProvider: onRegisterBodyProvider,
-            onRegisterTopLineProvider: onRegisterTopLineProvider,
+            onRegisterSourcePositionProvider: onRegisterSourcePositionProvider,
             onInsertImages: onInsertImages,
             onTogglePreview: onTogglePreview
         )
@@ -63,9 +63,9 @@ struct MarkdownTextView: NSViewRepresentable {
         context.coordinator.documentID = documentID
         context.coordinator.isActive = isActive
         context.coordinator.registerBodyProvider()
-        context.coordinator.registerTopLineProvider()
+        context.coordinator.registerSourcePositionProvider()
         textView.undoManager?.removeAllActions()
-        context.coordinator.restoreSourceLine(targetLine, for: documentID)
+        context.coordinator.restoreSourcePosition(targetSourcePosition, for: documentID)
         return scrollView
     }
 
@@ -89,23 +89,23 @@ struct MarkdownTextView: NSViewRepresentable {
             context.coordinator.resetDocument(id: documentID)
             context.coordinator.isActive = isActive
             context.coordinator.registerBodyProvider()
-            context.coordinator.registerTopLineProvider()
-            context.coordinator.restoreSourceLine(targetLine, for: documentID)
+            context.coordinator.registerSourcePositionProvider()
+            context.coordinator.restoreSourcePosition(targetSourcePosition, for: documentID)
         } else if !context.coordinator.isActive && isActive {
-            context.coordinator.restoreSourceLine(targetLine, for: documentID)
+            context.coordinator.restoreSourcePosition(targetSourcePosition, for: documentID)
             context.coordinator.restoreSelectionAndFocus(for: documentID)
         }
         context.coordinator.isActive = isActive
         context.coordinator.onTextChange = onTextChange
         context.coordinator.onRegisterBodyProvider = onRegisterBodyProvider
-        context.coordinator.onRegisterTopLineProvider = onRegisterTopLineProvider
+        context.coordinator.onRegisterSourcePositionProvider = onRegisterSourcePositionProvider
         context.coordinator.onInsertImages = onInsertImages
         context.coordinator.onTogglePreview = onTogglePreview
     }
 
     static func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {
         coordinator.onRegisterBodyProvider(nil)
-        coordinator.onRegisterTopLineProvider(nil)
+        coordinator.onRegisterSourcePositionProvider(nil)
         guard let textView = nsView.documentView as? PasteAwareTextView else { return }
         if textView.window?.firstResponder === textView {
             textView.window?.makeFirstResponder(nil)
@@ -120,11 +120,12 @@ struct MarkdownTextView: NSViewRepresentable {
         var documentID: String
         var onTextChange: () -> Void
         var onRegisterBodyProvider: (((() -> String?)?) -> Void)
-        var onRegisterTopLineProvider: (((() -> Int?)?) -> Void)
+        var onRegisterSourcePositionProvider: (((() -> Double?)?) -> Void)
         var onInsertImages: ([PastedImage]) -> String
         var onTogglePreview: (() -> Void)?
         var isActive = true
         var savedSelectedRange: NSRange?
+        private let lineIndexCache = SourceLineIndexCache()
         weak var scrollView: NSScrollView?
         weak var textView: NSTextView?
 
@@ -132,19 +133,20 @@ struct MarkdownTextView: NSViewRepresentable {
             documentID: String,
             onTextChange: @escaping () -> Void,
             onRegisterBodyProvider: @escaping (((() -> String?)?) -> Void),
-            onRegisterTopLineProvider: @escaping (((() -> Int?)?) -> Void),
+            onRegisterSourcePositionProvider: @escaping (((() -> Double?)?) -> Void),
             onInsertImages: @escaping ([PastedImage]) -> String,
             onTogglePreview: (() -> Void)?
         ) {
             self.documentID = documentID
             self.onTextChange = onTextChange
             self.onRegisterBodyProvider = onRegisterBodyProvider
-            self.onRegisterTopLineProvider = onRegisterTopLineProvider
+            self.onRegisterSourcePositionProvider = onRegisterSourcePositionProvider
             self.onInsertImages = onInsertImages
             self.onTogglePreview = onTogglePreview
         }
 
         func textDidChange(_ notification: Notification) {
+            lineIndexCache.invalidate()
             textView?.needsDisplay = true
             onTextChange()
         }
@@ -155,6 +157,7 @@ struct MarkdownTextView: NSViewRepresentable {
             let markdown = onInsertImages(images)
             guard !markdown.isEmpty, let textView else { return true }
             textView.insertText(markdown, replacementRange: textView.selectedRange())
+            lineIndexCache.invalidate()
             onTextChange()
             return true
         }
@@ -170,6 +173,7 @@ struct MarkdownTextView: NSViewRepresentable {
         func resetDocument(id: String) {
             documentID = id
             savedSelectedRange = nil
+            lineIndexCache.invalidate()
         }
 
         func restoreSelectionAndFocus(for documentID: String) {
@@ -191,17 +195,17 @@ struct MarkdownTextView: NSViewRepresentable {
             }
         }
 
-        func registerTopLineProvider() {
-            onRegisterTopLineProvider { [weak scrollView, weak textView] in
-                guard let scrollView, let textView else { return nil }
-                return textView.sourceLine(at: scrollView.contentView.bounds.origin)
+        func registerSourcePositionProvider() {
+            onRegisterSourcePositionProvider { [weak self, weak scrollView, weak textView] in
+                guard let self, let scrollView, let textView else { return nil }
+                return textView.sourcePosition(at: scrollView.contentView.bounds.origin, lineIndexCache: self.lineIndexCache)
             }
         }
 
-        func restoreSourceLine(_ line: Int, for documentID: String) {
+        func restoreSourcePosition(_ position: Double, for documentID: String) {
             DispatchQueue.main.async { [weak self, weak scrollView, weak textView] in
                 guard let self, let scrollView, let textView, self.documentID == documentID else { return }
-                let point = textView.pointForSourceLine(line)
+                let point = textView.pointForSourcePosition(position, lineIndexCache: self.lineIndexCache)
                 scrollView.contentView.scroll(to: point)
                 scrollView.reflectScrolledClipView(scrollView.contentView)
             }
@@ -240,7 +244,7 @@ private extension NSTextView {
         needsDisplay = true
     }
 
-    func sourceLine(at point: NSPoint) -> Int? {
+    func sourcePosition(at point: NSPoint, lineIndexCache: SourceLineIndexCache) -> Double? {
         guard let layoutManager, let textContainer else { return nil }
         let containerPoint = NSPoint(
             x: point.x - textContainerOrigin.x,
@@ -248,31 +252,98 @@ private extension NSTextView {
         )
         let glyphIndex = layoutManager.glyphIndex(for: containerPoint, in: textContainer)
         let characterIndex = layoutManager.characterIndexForGlyph(at: glyphIndex)
-        let prefix = (string as NSString).substring(to: min(characterIndex, string.count))
-        return prefix.reduce(1) { count, character in
-            character == "\n" ? count + 1 : count
+        let nsString = string as NSString
+        let sourceLine = lineIndexCache.lineNumber(containing: characterIndex, in: nsString)
+        let currentY = yPositionForSourceLine(sourceLine, lineIndexCache: lineIndexCache)
+        let nextY = yPositionForSourceLine(sourceLine + 1, lineIndexCache: lineIndexCache)
+        guard nextY > currentY else {
+            return Double(sourceLine)
         }
+
+        let progress = min(max((point.y - currentY) / (nextY - currentY), 0), 1)
+        return Double(sourceLine) + Double(progress)
     }
 
-    func pointForSourceLine(_ line: Int) -> NSPoint {
-        guard let layoutManager else { return .zero }
-        let targetLine = max(line, 1)
-        var currentLine = 1
-        var characterIndex = 0
+    func pointForSourcePosition(_ position: Double, lineIndexCache: SourceLineIndexCache) -> NSPoint {
+        let targetPosition = max(position, 1)
+        let targetLine = max(Int(floor(targetPosition)), 1)
+        let progress = CGFloat(targetPosition - Double(targetLine))
+        let currentY = yPositionForSourceLine(targetLine, lineIndexCache: lineIndexCache)
+        let nextY = yPositionForSourceLine(targetLine + 1, lineIndexCache: lineIndexCache)
+        let y = nextY > currentY ? currentY + (nextY - currentY) * progress : currentY
+        return NSPoint(x: 0, y: max(y, 0))
+    }
 
-        for character in string {
-            if currentLine >= targetLine {
-                break
-            }
-            characterIndex += 1
-            if character == "\n" {
-                currentLine += 1
+    private func yPositionForSourceLine(_ line: Int, lineIndexCache: SourceLineIndexCache) -> CGFloat {
+        guard let layoutManager else { return 0 }
+        let nsString = string as NSString
+        guard nsString.length > 0 else { return 0 }
+        let characterIndex = lineIndexCache.characterIndex(for: line, in: nsString)
+
+        guard characterIndex < nsString.length else {
+            let glyphCount = layoutManager.numberOfGlyphs
+            guard glyphCount > 0 else { return 0 }
+            let rect = layoutManager.lineFragmentRect(forGlyphAt: glyphCount - 1, effectiveRange: nil)
+            return max(rect.maxY + textContainerOrigin.y, 0)
+        }
+
+        let glyphIndex = layoutManager.glyphIndexForCharacter(at: characterIndex)
+        let rect = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil)
+        return max(rect.minY + textContainerOrigin.y, 0)
+    }
+}
+
+final class SourceLineIndexCache {
+    private var cachedLength = -1
+    private var cachedLineStarts = [0]
+
+    func invalidate() {
+        cachedLength = -1
+        cachedLineStarts = [0]
+    }
+
+    func lineNumber(containing characterIndex: Int, in string: NSString) -> Int {
+        let starts = lineStarts(in: string)
+        let target = min(max(characterIndex, 0), string.length)
+        var low = 0
+        var high = starts.count - 1
+
+        while low <= high {
+            let mid = (low + high) / 2
+            if starts[mid] <= target {
+                low = mid + 1
+            } else {
+                high = mid - 1
             }
         }
 
-        let glyphIndex = layoutManager.glyphIndexForCharacter(at: min(characterIndex, string.count))
-        let rect = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil)
-        return NSPoint(x: 0, y: max(rect.minY + textContainerOrigin.y, 0))
+        return max(high + 1, 1)
+    }
+
+    func characterIndex(for line: Int, in string: NSString) -> Int {
+        let starts = lineStarts(in: string)
+        let index = max(line, 1) - 1
+        guard index < starts.count else { return string.length }
+        return starts[index]
+    }
+
+    private func lineStarts(in string: NSString) -> [Int] {
+        guard cachedLength != string.length else {
+            return cachedLineStarts
+        }
+
+        var starts = [0]
+        var index = 0
+        while index < string.length {
+            if string.character(at: index) == 10 {
+                starts.append(index + 1)
+            }
+            index += 1
+        }
+
+        cachedLength = string.length
+        cachedLineStarts = starts
+        return starts
     }
 }
 

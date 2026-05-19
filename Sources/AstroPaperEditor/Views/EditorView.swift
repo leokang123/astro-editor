@@ -4,16 +4,16 @@ struct EditorView: View {
     let document: BlogDocument?
     let hasProject: Bool
     let editorMode: EditorMode
-    let editorTopLine: Int
+    let editorSourcePosition: Double
     let projectRoot: URL
     var onOpenProject: () -> Void
     var onCloseUnavailableDocument: () -> Void
     var onTogglePreview: () -> Void
     var onTextChange: () -> Void
     var onRegisterBodyProvider: (((() -> String?)?) -> Void)
-    var onRegisterTopLineProvider: (((() -> Int?)?) -> Void)
+    var onRegisterSourcePositionProvider: (((() -> Double?)?) -> Void)
     var onInsertImages: ([PastedImage]) -> String
-    var onSourceLineChange: (Int) -> Void
+    var onSourcePositionChange: (Double) -> Void
     let contentMaxWidth: CGFloat
 
     var body: some View {
@@ -55,9 +55,9 @@ struct EditorView: View {
                             MarkdownPreviewView(
                                 document: document,
                                 projectRoot: projectRoot,
-                                sourceLine: editorTopLine,
-                                onSourceLineChange: { line in
-                                    onSourceLineChange(line)
+                                sourcePosition: editorSourcePosition,
+                                onSourcePositionChange: { position in
+                                    onSourcePositionChange(position)
                                 }
                             )
                             .opacity(editorMode == .preview ? 1 : 0)
@@ -67,7 +67,7 @@ struct EditorView: View {
                             MarkdownTextView(
                                 documentID: document.fileURL.path,
                                 text: document.body,
-                                targetLine: editorTopLine,
+                                targetSourcePosition: editorSourcePosition,
                                 isActive: editorMode == .edit,
                                 onTextChange: {
                                     onTextChange()
@@ -75,8 +75,8 @@ struct EditorView: View {
                                 onRegisterBodyProvider: { provider in
                                     onRegisterBodyProvider(provider)
                                 },
-                                onRegisterTopLineProvider: { provider in
-                                    onRegisterTopLineProvider(provider)
+                                onRegisterSourcePositionProvider: { provider in
+                                    onRegisterSourcePositionProvider(provider)
                                 },
                                 onInsertImages: { images in
                                     onInsertImages(images)

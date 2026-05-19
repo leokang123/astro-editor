@@ -88,6 +88,10 @@ struct MarkdownPreviewHTMLRenderer {
               font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
               font-size: 0.92em;
             }
+            .source-code-line {
+              display: block;
+              min-height: 1em;
+            }
             :not(pre) > code {
               background: var(--code-bg);
               border-radius: 4px;
@@ -185,8 +189,8 @@ struct MarkdownPreviewHTMLRenderer {
     private func renderMarkdown(_ markdown: String) -> String {
         var html: [String] = []
         var paragraph: [String] = []
-        var listItems: [String] = []
-        var codeLines: [String] = []
+        var listItems: [(line: Int, text: String)] = []
+        var codeLines: [(line: Int, text: String)] = []
         var codeLanguage = ""
         var inCode = false
         var inBlockMath = false
@@ -197,7 +201,7 @@ struct MarkdownPreviewHTMLRenderer {
         var blockMathStartLine = 1
 
         func marker(_ line: Int) -> String {
-            " data-source-line=\"\(line)\""
+            sourceLineMarker(line)
         }
 
         func flushParagraph() {
@@ -208,17 +212,23 @@ struct MarkdownPreviewHTMLRenderer {
 
         func flushList() {
             guard !listItems.isEmpty else { return }
-            html.append("<ul\(marker(listStartLine))>\(listItems.map { "<li>\(inlineHTML($0))</li>" }.joined())</ul>")
+            let items = listItems
+                .map { "<li\(marker($0.line))>\(inlineHTML($0.text))</li>" }
+                .joined()
+            html.append("<ul\(marker(listStartLine))>\(items)</ul>")
             listItems.removeAll()
         }
 
         func flushCode() {
-            let code = codeLines.joined(separator: "\n")
+            let code = codeLines.map { $0.text }.joined(separator: "\n")
             if codeLanguage.lowercased() == "mermaid" {
                 html.append("<div class=\"mermaid\"\(marker(codeStartLine))>\(escapeHTML(code))</div>")
             } else {
                 let languageClass = codeLanguage.isEmpty ? "" : " class=\"language-\(escapeHTML(codeLanguage))\""
-                html.append("<pre\(marker(codeStartLine))><code\(languageClass)>\(escapeHTML(code))</code></pre>")
+                let codeHTML = codeLines
+                    .map { "<span class=\"source-code-line\"\(marker($0.line))>\(escapeHTML($0.text))</span>" }
+                    .joined()
+                html.append("<pre\(marker(codeStartLine))><code\(languageClass)>\(codeHTML)</code></pre>")
             }
             codeLines.removeAll()
             codeLanguage = ""
@@ -247,7 +257,7 @@ struct MarkdownPreviewHTMLRenderer {
             }
 
             if inCode {
-                codeLines.append(line)
+                codeLines.append((sourceLine, line))
                 index += 1
                 continue
             }
@@ -342,7 +352,7 @@ struct MarkdownPreviewHTMLRenderer {
                 if listItems.isEmpty {
                     listStartLine = sourceLine
                 }
-                listItems.append(item)
+                listItems.append((sourceLine, item))
                 index += 1
                 continue
             }
@@ -364,7 +374,11 @@ struct MarkdownPreviewHTMLRenderer {
     }
 
     private func wrapSourceLine(_ html: String, line: Int) -> String {
-        "<div data-source-line=\"\(line)\">\(html)</div>"
+        "<div\(sourceLineMarker(line))>\(html)</div>"
+    }
+
+    private func sourceLineMarker(_ line: Int) -> String {
+        " data-source-line=\"\(line)\""
     }
 
     private func inlineHTML(_ markdown: String) -> String {
@@ -469,20 +483,20 @@ struct MarkdownPreviewHTMLRenderer {
         let separator = lines[startIndex + 1].trimmingCharacters(in: .whitespaces)
         guard isTableRow(header), isTableSeparator(separator) else { return nil }
 
-        var rows: [[String]] = [tableCells(from: header)]
+        var rows: [(line: Int, cells: [String])] = [(startIndex + 1, tableCells(from: header))]
         var index = startIndex + 2
         while index < lines.count {
             let line = lines[index].trimmingCharacters(in: .whitespaces)
             guard isTableRow(line), !isTableSeparator(line) else { break }
-            rows.append(tableCells(from: line))
+            rows.append((index + 1, tableCells(from: line)))
             index += 1
         }
 
-        guard let headerCells = rows.first, !headerCells.isEmpty else { return nil }
+        guard let headerRow = rows.first, !headerRow.cells.isEmpty else { return nil }
         let bodyRows = rows.dropFirst()
-        let headHTML = "<thead><tr>\(headerCells.map { "<th>\(inlineHTML($0))</th>" }.joined())</tr></thead>"
+        let headHTML = "<thead><tr\(sourceLineMarker(headerRow.line))>\(headerRow.cells.map { "<th>\(inlineHTML($0))</th>" }.joined())</tr></thead>"
         let rowHTML = bodyRows.map { row in
-            "<tr>\(row.map { "<td>\(inlineHTML($0))</td>" }.joined())</tr>"
+            "<tr\(sourceLineMarker(row.line))>\(row.cells.map { "<td>\(inlineHTML($0))</td>" }.joined())</tr>"
         }.joined()
         let bodyHTML = "<tbody>\(rowHTML)</tbody>"
         return ("<table>\(headHTML)\(bodyHTML)</table>", index)

@@ -2,28 +2,28 @@ import Foundation
 
 final class EditorSession {
     private var bodyProvider: (() -> String?)?
-    private var topLineProvider: (() -> Int?)?
-    private(set) var topLine = 1
+    private var sourcePositionProvider: (() -> Double?)?
+    private(set) var sourcePosition = 1.0
 
     func setBodyProvider(_ provider: (() -> String?)?) {
         bodyProvider = provider
     }
 
-    func setTopLineProvider(_ provider: (() -> Int?)?) {
-        topLineProvider = provider
+    func setSourcePositionProvider(_ provider: (() -> Double?)?) {
+        sourcePositionProvider = provider
     }
 
     func currentBody() -> String? {
         bodyProvider?()
     }
 
-    func updateTopLine(_ line: Int) {
-        topLine = max(line, 1)
+    func updateSourcePosition(_ position: Double) {
+        sourcePosition = max(position, 1)
     }
 
-    func captureTopLine() {
-        guard let line = topLineProvider?() else { return }
-        updateTopLine(line)
+    func captureSourcePosition() {
+        guard let position = sourcePositionProvider?() else { return }
+        updateSourcePosition(position)
     }
 
     func discardBodyProvider() {
@@ -32,7 +32,7 @@ final class EditorSession {
 
     func reset() {
         bodyProvider = nil
-        topLineProvider = nil
-        topLine = 1
+        sourcePositionProvider = nil
+        sourcePosition = 1.0
     }
 }

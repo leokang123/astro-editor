@@ -49,8 +49,8 @@ final class BlogStore: ObservableObject {
     private static let lastProjectRootKey = "lastProjectRoot"
     private static let sidebarSortOptionKey = "sidebarSortOption"
 
-    var editorTopLine: Int {
-        documentSession.topLine
+    var editorSourcePosition: Double {
+        documentSession.sourcePosition
     }
 
     var blogRoot: URL {
@@ -234,16 +234,16 @@ final class BlogStore: ObservableObject {
         documentSession.setBodyProvider(provider)
     }
 
-    func setEditorTopLineProvider(_ provider: (() -> Int?)?) {
-        documentSession.setTopLineProvider(provider)
+    func setEditorSourcePositionProvider(_ provider: (() -> Double?)?) {
+        documentSession.setSourcePositionProvider(provider)
     }
 
     func setFrontmatterProvider(_ provider: FrontmatterDraftProvider?) {
         documentSession.setFrontmatterProvider(provider)
     }
 
-    func updateEditorTopLine(_ line: Int) {
-        documentSession.updateTopLine(line)
+    func updateEditorSourcePosition(_ position: Double) {
+        documentSession.updateSourcePosition(position)
     }
 
     func markFrontmatterChanged() {
@@ -287,7 +287,7 @@ final class BlogStore: ObservableObject {
         guard canTogglePreview else { return }
         if editorMode == .edit {
             hideEditorFindInterface()
-            captureEditorTopLine()
+            captureEditorSourcePosition()
             flushSessionDraftsToCurrentDocument()
         }
         editorMode = editorMode == .edit ? .preview : .edit
@@ -995,8 +995,8 @@ final class BlogStore: ObservableObject {
         isDirty = documentSession.isDirty(currentDocument: currentDocument)
     }
 
-    private func captureEditorTopLine() {
-        documentSession.captureTopLine()
+    private func captureEditorSourcePosition() {
+        documentSession.captureSourcePosition()
     }
 
     private func appendCategories(from nodes: [BlogNode], into destinations: inout [CategoryDestination]) {

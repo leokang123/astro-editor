@@ -37,16 +37,16 @@ struct ContentView: View {
                     document: store.currentDocument,
                     hasProject: store.hasProject,
                     editorMode: store.editorMode,
-                    editorTopLine: store.editorTopLine,
+                    editorSourcePosition: store.editorSourcePosition,
                     projectRoot: store.projectRoot,
                     onOpenProject: store.chooseProjectFolder,
                     onCloseUnavailableDocument: store.closeUnavailableProjectDocument,
                     onTogglePreview: store.toggleEditorMode,
                     onTextChange: store.markBodyChanged,
                     onRegisterBodyProvider: store.setEditorBodyProvider,
-                    onRegisterTopLineProvider: store.setEditorTopLineProvider,
+                    onRegisterSourcePositionProvider: store.setEditorSourcePositionProvider,
                     onInsertImages: store.insertImages,
-                    onSourceLineChange: store.updateEditorTopLine,
+                    onSourcePositionChange: store.updateEditorSourcePosition,
                     contentMaxWidth: editorContentWidth.maxWidth
                 )
                     .frame(minWidth: 420)

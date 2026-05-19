@@ -10,28 +10,28 @@ final class DocumentSession {
     private var bodyDirtyRecomputeTask: Task<Void, Never>?
     private var frontmatterProvider: FrontmatterDraftProvider?
 
-    var topLine: Int {
-        editorSession.topLine
+    var sourcePosition: Double {
+        editorSession.sourcePosition
     }
 
     func setBodyProvider(_ provider: (() -> String?)?) {
         editorSession.setBodyProvider(provider)
     }
 
-    func setTopLineProvider(_ provider: (() -> Int?)?) {
-        editorSession.setTopLineProvider(provider)
+    func setSourcePositionProvider(_ provider: (() -> Double?)?) {
+        editorSession.setSourcePositionProvider(provider)
     }
 
     func setFrontmatterProvider(_ provider: FrontmatterDraftProvider?) {
         frontmatterProvider = provider
     }
 
-    func updateTopLine(_ line: Int) {
-        editorSession.updateTopLine(line)
+    func updateSourcePosition(_ position: Double) {
+        editorSession.updateSourcePosition(position)
     }
 
-    func captureTopLine() {
-        editorSession.captureTopLine()
+    func captureSourcePosition() {
+        editorSession.captureSourcePosition()
     }
 
     func open(_ document: BlogDocument) {
