@@ -13,7 +13,7 @@ struct AssetImagePreferencesView: View {
                     Text("Asset Images")
                         .font(.title2)
                         .fontWeight(.semibold)
-                    Text("Finds files in src/assets/images that are not referenced by blog and page source files.")
+                    Text("Finds site images that are not referenced by posts or pages.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -40,10 +40,10 @@ struct AssetImagePreferencesView: View {
             } else {
                 GroupBox("Rule") {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("A file is kept when its filename appears in blog posts, pages, layouts, components, or site settings.")
+                        Text("A file is kept when its filename appears in posts, pages, layouts, components, or site settings.")
                         Text("Unused files are moved to the macOS Trash, not permanently deleted.")
                             .foregroundStyle(.secondary)
-                        Text(store.projectRoot.appendingPathComponent("src/assets/images", isDirectory: true).path)
+                        Text(store.projectRoot.appendingPathComponent("src/assets/images", isDirectory: true).displayPath)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
@@ -106,7 +106,7 @@ struct AssetImagePreferencesView: View {
                             .foregroundStyle(.secondary)
                         Text("No scan yet")
                             .font(.headline)
-                        Text("Run Scan before optimizing assets/images.")
+                        Text("Run Scan before optimizing site images.")
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -134,6 +134,10 @@ struct AssetImagePreferencesView: View {
                 message = store.assetCleanupMessage
             }
         }
+        .onChange(of: store.projectRoot) { _ in
+            preview = nil
+            message = ""
+        }
     }
 
     private func scan() {
@@ -153,7 +157,7 @@ struct AssetImagePreferencesView: View {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Move unused images to Trash?"
-        alert.informativeText = "\(preview.unusedCount) files in src/assets/images are not referenced by source files. They will be moved to the macOS Trash."
+        alert.informativeText = "\(preview.unusedCount) site images are not referenced by posts or pages. They will be moved to the macOS Trash."
         alert.addButton(withTitle: "Move to Trash")
         alert.addButton(withTitle: "Cancel")
 

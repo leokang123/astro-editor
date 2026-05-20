@@ -32,7 +32,7 @@ struct AboutPagePreferencesView: View {
                     Text("About Page")
                         .font(.title2)
                         .fontWeight(.semibold)
-                    Text("src/pages/about.md")
+                    Text("About page content")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
@@ -108,6 +108,12 @@ struct AboutPagePreferencesView: View {
                 reload()
             }
         }
+        .onChange(of: store.projectRoot) { _ in
+            reset()
+            if store.hasProject {
+                reload()
+            }
+        }
     }
 
     private func reload() {
@@ -117,10 +123,16 @@ struct AboutPagePreferencesView: View {
             let loadedDraft = AboutPageDraft(page: page)
             draft = loadedDraft
             savedDraft = loadedDraft
-            message = "Loaded \(store.aboutPageURL.path)"
+            message = "Loaded About page"
         } catch {
             message = error.localizedDescription
         }
+    }
+
+    private func reset() {
+        draft = AboutPageDraft()
+        savedDraft = AboutPageDraft()
+        message = ""
     }
 
     private func save() {
@@ -128,7 +140,7 @@ struct AboutPagePreferencesView: View {
         do {
             try store.writeAboutPage(draft.page)
             savedDraft = draft
-            message = "Saved \(store.aboutPageURL.path)"
+            message = "Saved About page"
         } catch {
             message = error.localizedDescription
         }
@@ -139,7 +151,7 @@ struct AboutPagePreferencesView: View {
         do {
             let publicPath = try store.copyAboutProfileImage(from: sourceURL)
             draft.replaceProfileImage(with: publicPath, defaultAlt: "Profile photo")
-            message = "Profile photo copied to public\(publicPath). Save About page to keep the new reference."
+            message = "Profile photo updated. Save About page to keep it."
         } catch {
             message = error.localizedDescription
         }

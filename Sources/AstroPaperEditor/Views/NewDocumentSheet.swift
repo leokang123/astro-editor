@@ -43,7 +43,7 @@ struct NewDocumentSheet: View {
             Toggle("Featured", isOn: $featured)
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("OG Image")
+                Text("Social Preview Image")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -98,7 +98,7 @@ struct NewDocumentSheet: View {
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.png, .jpeg, .gif, .tiff, .heic, .webP]
-        panel.message = "Choose an image to copy into src/assets/images and use as ogImage."
+        panel.message = "Choose an image for social previews."
 
         if panel.runModal() == .OK {
             ogImageURL = panel.url

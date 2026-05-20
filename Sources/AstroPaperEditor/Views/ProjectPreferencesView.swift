@@ -16,7 +16,7 @@ struct ProjectPreferencesView: View {
                     GridRow {
                         Text("Root")
                             .foregroundStyle(.secondary)
-                        Text(store.hasProject ? store.projectRoot.path : "No project selected")
+                        Text(store.hasProject ? store.projectRoot.displayPath : "No project selected")
                             .lineLimit(1)
                             .truncationMode(.middle)
                             .textSelection(.enabled)
@@ -24,9 +24,9 @@ struct ProjectPreferencesView: View {
 
                     if store.hasProject {
                         GridRow {
-                            Text("Blog")
+                            Text("Posts")
                                 .foregroundStyle(.secondary)
-                            Text(store.blogRoot.path)
+                            Text(store.blogRoot.displayPath)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                                 .textSelection(.enabled)
@@ -35,25 +35,25 @@ struct ProjectPreferencesView: View {
                         GridRow {
                             Text("About")
                                 .foregroundStyle(.secondary)
-                            Text(store.aboutPageURL.path)
+                            Text(store.aboutPageURL.displayPath)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                                 .textSelection(.enabled)
                         }
 
                         GridRow {
-                            Text("Config")
+                            Text("Site config")
                                 .foregroundStyle(.secondary)
-                            Text(store.configURL.path)
+                            Text(store.configURL.displayPath)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                                 .textSelection(.enabled)
                         }
 
                         GridRow {
-                            Text("User settings")
+                            Text("Site settings")
                                 .foregroundStyle(.secondary)
-                            Text(store.userSettingsURL.path)
+                            Text(store.userSettingsURL.displayPath)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                                 .textSelection(.enabled)

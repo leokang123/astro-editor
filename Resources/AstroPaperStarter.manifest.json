@@ -1,9 +1,9 @@
 {
   "name": "AstroPaperStarter",
-  "source": "https://github.com/satnaing/astro-paper",
-  "version": "5.5.0",
-  "tag": "v5.5.0",
-  "tagCommit": "9d96bbd",
-  "archiveSha256": "9a34b29182881ae0a398c090558e284b37ad34275c61002a1838779e796a7487",
-  "notes": "Official AstroPaper snapshot with src/data/blog layout compatible with this editor. Docker is patched to build Astro with pnpm and serve the generated dist folder through nginx on localhost:4321. Starter blog content is replaced with three AstroPaperEditor beginner guide posts, unused demo files in src/assets/images are removed, and src/config.ts reads src/user-settings.json plus Docker preview URL environment values."
+  "source": "local-custom-astropaper-skeleton",
+  "version": "5.5.1-custom",
+  "tag": "custom-2026-05-20",
+  "tagCommit": null,
+  "archiveSha256": "7a60b732dab7e57b119c591a1c198288205c197817412d0c8e5f19ca74132ad2",
+  "notes": "Custom AstroPaper starter generated from the local custom blog skeleton. It keeps the src/data/blog content layout, nested folder-based categories, category order sorting, user-settings.json site settings, Markdown extensions, Pagefind build script, and Docker preview setup. Personal posts, personal images, generated output, dependencies, git data, Pagefind output, and local migration scripts are excluded."
 }

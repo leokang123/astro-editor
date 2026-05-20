@@ -38,6 +38,7 @@ final class BlogStore: ObservableObject {
 
     private let fileService = BlogFileService()
     private let templateService = AstroPaperTemplateService()
+    private let gitService = GitService()
     private let imageService = ImageService()
     private let buildService = BuildService()
     private let sitePageService = SitePageService()
@@ -111,7 +112,7 @@ final class BlogStore: ObservableObject {
         panel.canCreateDirectories = true
         panel.allowsMultipleSelection = false
         panel.directoryURL = projectRoot
-        panel.message = "Choose the AstroPaper project root that contains src/data/blog."
+        panel.message = "Choose the folder for your AstroPaper site."
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
         guard fileService.validateProjectRoot(url) else {
@@ -120,6 +121,7 @@ final class BlogStore: ObservableObject {
         }
 
         if confirmDiscardOrSaveChanges() {
+            resetProjectRuntimeState()
             projectRoot = url
             hasProject = true
             saveProjectRoot(url)
@@ -132,7 +134,7 @@ final class BlogStore: ObservableObject {
     private func offerProjectCreationIfPossible(at url: URL) {
         do {
             guard try templateService.isEmptyProjectDestination(url) else {
-                message = AppMessage(text: "The selected folder is not an AstroPaper project. It does not contain src/data/blog, and it is not empty. Choose an existing AstroPaper project root, or select an empty folder to create a new AstroPaper project.")
+                message = AppMessage(text: "The selected folder is not an AstroPaper project, and it is not empty. Choose an existing project, or select an empty folder to create a new one.")
                 return
             }
         } catch {
@@ -142,16 +144,24 @@ final class BlogStore: ObservableObject {
 
         let alert = NSAlert()
         alert.alertStyle = .informational
-        alert.messageText = "Create AstroPaper project?"
-        alert.informativeText = "The selected folder is empty. Create a new AstroPaper project here using the bundled official AstroPaper template?"
+        alert.messageText = "Start AstroPaper project?"
+        alert.informativeText = "The selected folder is empty. Create a new project from the bundled template, or clone an existing Git repository into this folder."
         alert.addButton(withTitle: "Create Project")
+        alert.addButton(withTitle: "Clone Repository")
         alert.addButton(withTitle: "Cancel")
 
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let response = alert.runModal()
+        guard response != .alertThirdButtonReturn else { return }
+        if response == .alertSecondButtonReturn {
+            promptCloneRepository(into: url)
+            return
+        }
+
         guard confirmDiscardOrSaveChanges() else { return }
 
         do {
             try templateService.createProject(at: url)
+            resetProjectRuntimeState()
             projectRoot = url
             hasProject = true
             saveProjectRoot(url)
@@ -164,6 +174,62 @@ final class BlogStore: ObservableObject {
         }
     }
 
+    private func promptCloneRepository(into url: URL) {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "Clone Git repository"
+        alert.informativeText = "Enter the repository URL to clone into the empty selected folder."
+        alert.addButton(withTitle: "Clone")
+        alert.addButton(withTitle: "Cancel")
+
+        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 420, height: 24))
+        textField.placeholderString = "https://github.com/user/repo.git"
+        alert.accessoryView = textField
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        let remoteURL = textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !remoteURL.isEmpty else {
+            message = AppMessage(text: "Remote URL is required.")
+            return
+        }
+        guard confirmDiscardOrSaveChanges() else { return }
+
+        cloneRepository(remoteURL: remoteURL, into: url)
+    }
+
+    private func cloneRepository(remoteURL: String, into url: URL) {
+        let service = gitService
+        statusText = "Cloning Git repository..."
+
+        Task {
+            do {
+                _ = try await Task.detached(priority: .userInitiated) {
+                    try service.clone(remoteURL: remoteURL, into: url)
+                }.value
+
+                guard fileService.validateProjectRoot(url) else {
+                    statusText = "Clone finished, but project is invalid"
+                    message = AppMessage(text: "The repository was cloned, but it does not look like an AstroPaper project with src/data/blog.")
+                    return
+                }
+
+                resetProjectRuntimeState()
+                projectRoot = url
+                hasProject = true
+                saveProjectRoot(url)
+                closeCurrentDocument()
+                selectionID = nil
+                statusText = "Cloned Git repository"
+                rescan()
+                gitController.refreshStatus(at: url)
+            } catch {
+                statusText = "Clone failed"
+                message = AppMessage(text: error.localizedDescription)
+            }
+        }
+    }
+
     func rescan(selectingRelativePath selectedRelativePath: String? = nil, editorMode selectedEditorMode: EditorMode? = nil) {
         guard fileService.validateProjectRoot(projectRoot) else {
             handleUnavailableProject()
@@ -172,10 +238,9 @@ final class BlogStore: ObservableObject {
 
         let root = projectRoot
         let service = fileService
-        let rootPath = blogRoot.path
         let sortOption = sidebarSortOption
         scanTask?.cancel()
-        statusText = "Scanning \(rootPath)"
+        statusText = "Scanning posts..."
 
         scanTask = Task {
             do {
@@ -184,7 +249,7 @@ final class BlogStore: ObservableObject {
                 }.value
                 guard !Task.isCancelled, projectRoot == root else { return }
                 tree = scannedTree
-                statusText = "Scanned \(rootPath)"
+                statusText = "Scanned posts"
                 if let selectedRelativePath,
                    let node = scannedTree.firstNode(where: { $0.kind == .document && $0.relativePath == selectedRelativePath }) {
                     selectionID = node.id
@@ -396,7 +461,7 @@ final class BlogStore: ObservableObject {
         guard confirmDiscardOrSaveChanges() else { return }
         let alert = NSAlert()
         alert.messageText = node.kind == .document ? "Rename Document" : "Rename Category"
-        alert.informativeText = "The filesystem name will be changed. Frontmatter title is not changed automatically."
+        alert.informativeText = "The file name will be changed. The post title is not changed automatically."
         alert.addButton(withTitle: "Rename")
         alert.addButton(withTitle: "Cancel")
 
@@ -712,7 +777,7 @@ final class BlogStore: ObservableObject {
             let rawWebsite = try siteSettingsService.readHomeSettings(projectRoot: projectRoot).website
             let website = rawWebsite.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !website.isEmpty else {
-                message = AppMessage(text: "Website URL is empty in src/user-settings.json.")
+                message = AppMessage(text: "Website URL is empty in site settings.")
                 return
             }
 
@@ -809,12 +874,18 @@ final class BlogStore: ObservableObject {
         creationParentID = nil
         actionNodeID = nil
         activeSheet = nil
-        gitController.status = .unknown
+        resetProjectRuntimeState()
         if closeDocument {
             closeCurrentDocument()
             editorMode = .edit
         }
         statusText = "Project is no longer available"
+    }
+
+    private func resetProjectRuntimeState() {
+        buildLog = ""
+        assetCleanupMessage = ""
+        gitController.resetProjectState()
     }
 
     func previewUnusedAssetImages() async -> AssetImageCleanupPreview? {
@@ -868,7 +939,7 @@ final class BlogStore: ObservableObject {
 
     func writeAboutPage(_ page: SiteMarkdownPage) throws {
         try sitePageService.writeAbout(page, projectRoot: projectRoot)
-        statusText = "Saved src/pages/about.md"
+        statusText = "Saved About page"
     }
 
     func readHomeSettings() throws -> HomeSettings {
@@ -877,12 +948,12 @@ final class BlogStore: ObservableObject {
 
     func writeHomeSettings(_ settings: HomeSettings) throws {
         try siteSettingsService.writeHomeSettings(settings, projectRoot: projectRoot)
-        statusText = "Saved src/user-settings.json"
+        statusText = "Saved site settings"
     }
 
     func writeSocialSettings(_ settings: HomeSettings) throws {
         try siteSettingsService.writeSocialSettings(settings, projectRoot: projectRoot)
-        statusText = "Saved USER_SOCIALS"
+        statusText = "Saved social links"
     }
 
     func featuredDocuments() throws -> [FeaturedDocument] {

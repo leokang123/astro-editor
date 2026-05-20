@@ -49,7 +49,7 @@ struct DeveloperPreferencesView: View {
 
             GroupBox("Docker Compose") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Runs in the selected blog project root:")
+                    Text("Runs in the selected site folder:")
                         .foregroundStyle(.secondary)
                     Text("docker compose -p \(BuildService.composeProjectName) down")
                         .font(.system(.body, design: .monospaced))
@@ -60,7 +60,7 @@ struct DeveloperPreferencesView: View {
                     Text("Local preview URL: \(BuildService.localPreviewURL.absoluteString)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text(store.hasProject ? store.projectRoot.path : "No project selected")
+                    Text(store.hasProject ? store.projectRoot.displayPath : "No project selected")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)

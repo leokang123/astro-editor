@@ -60,6 +60,16 @@ final class GitService {
         return log.isEmpty ? "Git remote configured." : log
     }
 
+    func clone(remoteURL: String, into destination: URL) throws -> String {
+        let cleanRemote = remoteURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanRemote.isEmpty else {
+            throw GitServiceError.invalidRemoteURL
+        }
+
+        let output = try runGit(["clone", cleanRemote, "."], at: destination).output
+        return output.isEmpty ? "Repository cloned." : output
+    }
+
     func commitAndPush(at projectRoot: URL, message: String) async throws -> String {
         let cleanMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanMessage.isEmpty else {

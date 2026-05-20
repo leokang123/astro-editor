@@ -19,7 +19,7 @@ struct HomeSettingsPreferencesView: View {
                     Text("Home")
                         .font(.title2)
                         .fontWeight(.semibold)
-                    Text("src/user-settings.json")
+                    Text("Site settings")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
@@ -95,6 +95,12 @@ struct HomeSettingsPreferencesView: View {
         }
         .onChange(of: store.hasProject) { hasProject in
             if hasProject, settings == nil {
+                reload()
+            }
+        }
+        .onChange(of: store.projectRoot) { _ in
+            reset()
+            if store.hasProject {
                 reload()
             }
         }
@@ -196,10 +202,17 @@ struct HomeSettingsPreferencesView: View {
             settings = loaded
             lastLoaded = loaded
             descriptionDraft = loaded.homeDescription.joined(separator: "\n")
-            message = "Loaded src/user-settings.json"
+            message = "Loaded site settings"
         } catch {
             message = error.localizedDescription
         }
+    }
+
+    private func reset() {
+        settings = nil
+        lastLoaded = nil
+        descriptionDraft = ""
+        message = ""
     }
 
     private func save() {
@@ -208,7 +221,7 @@ struct HomeSettingsPreferencesView: View {
         do {
             try store.writeHomeSettings(settings)
             lastLoaded = settings
-            message = "Saved src/user-settings.json"
+            message = "Saved site settings"
         } catch {
             message = error.localizedDescription
         }

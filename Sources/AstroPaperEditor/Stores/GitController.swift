@@ -16,8 +16,14 @@ final class GitController: ObservableObject {
         !isOperationRunning
     }
 
+    func resetProjectState() {
+        log = ""
+        status = .unknown
+    }
+
     func refreshStatus(at projectRoot: URL) {
         let service = gitService
+        log = ""
         status = GitRepositoryStatus(
             isRepository: false,
             branch: "",

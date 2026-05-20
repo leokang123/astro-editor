@@ -46,7 +46,7 @@ struct GitPreferencesView: View {
                     GridRow {
                         Text("Git")
                             .foregroundStyle(.secondary)
-                        Text(gitController.status.gitExecutablePath.isEmpty ? "-" : gitController.status.gitExecutablePath)
+                        Text(gitController.status.gitExecutablePath.isEmpty ? "-" : gitController.status.gitExecutablePath.abbreviatingHomeDirectoryForDisplay)
                             .lineLimit(1)
                             .truncationMode(.middle)
                             .textSelection(.enabled)
@@ -157,6 +157,12 @@ struct GitPreferencesView: View {
                 loadCurrentStatusIntoFields()
             }
         }
+        .onChange(of: projectRoot) { _ in
+            resetFields()
+            if hasProject {
+                onRefreshGitStatus()
+            }
+        }
         .onChange(of: gitController.status) { status in
             guard hasProject else { return }
             if !status.remoteURL.isEmpty {
@@ -168,9 +174,14 @@ struct GitPreferencesView: View {
         }
     }
 
+    private func resetFields() {
+        remoteURL = ""
+        branch = "main"
+    }
+
     private var projectPathText: String {
         guard hasProject else { return "No project selected" }
-        return gitController.status.projectRootPath.isEmpty ? projectRoot.path : gitController.status.projectRootPath
+        return (gitController.status.projectRootPath.isEmpty ? projectRoot.path : gitController.status.projectRootPath).abbreviatingHomeDirectoryForDisplay
     }
 
     private func loadCurrentStatusIntoFields() {

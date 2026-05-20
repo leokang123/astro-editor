@@ -14,7 +14,7 @@ struct InspectorView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Label("Frontmatter", systemImage: "slider.horizontal.3")
+                Label("Post Details", systemImage: "slider.horizontal.3")
                     .font(.headline)
                 Spacer()
             }
@@ -72,7 +72,7 @@ struct InspectorView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("No document selected")
                         .font(.headline)
-                    Text("Create or open a document to edit AstroPaper frontmatter.")
+                    Text("Create or open a document to edit post details.")
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -343,7 +343,7 @@ private struct OGImageInspector: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Text("OG Image")
+                Text("Social Preview Image")
                 Spacer()
                 if hasImage {
                     Button("Clear") {
@@ -380,7 +380,7 @@ private struct OGImageInspector: View {
                         Image(systemName: hasImage ? "exclamationmark.triangle" : "photo")
                             .font(.title2)
                             .foregroundStyle(.secondary)
-                        Text(hasImage ? "Image file not found" : "No OG image")
+                        Text(hasImage ? "Image file not found" : "No social preview image")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -394,7 +394,7 @@ private struct OGImageInspector: View {
             .allowsHitTesting(false)
 
             if hasImage {
-                Text(ogImagePath)
+                Text("Saved as \(storedImageLabel)")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -417,11 +417,15 @@ private struct OGImageInspector: View {
     }
 
     private var imageLabel: String {
-        imageURL?.lastPathComponent ?? "OG image"
+        imageURL?.lastPathComponent ?? "Social preview image"
     }
 
-    private var ogImagePath: String {
-        document.frontmatter.ogImage ?? ""
+    private var storedImageLabel: String {
+        guard let value = document.frontmatter.ogImage?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty else {
+            return "Social preview image"
+        }
+        return value.split(separator: "/").last.map(String.init) ?? value
     }
 
     private func chooseImage() {
@@ -430,7 +434,7 @@ private struct OGImageInspector: View {
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.png, .jpeg, .gif, .tiff, .heic, .webP]
-        panel.message = "Choose an image to copy into src/assets/images and use as ogImage."
+        panel.message = "Choose an image for social previews."
 
         if panel.runModal() == .OK, let url = panel.url {
             onSetOGImage(url)

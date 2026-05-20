@@ -14,19 +14,39 @@ struct AboutProfilePhotoSection: View {
         ImageCache.image(at: profileImageURL)
     }
 
+    private var profileImageDisplayName: String {
+        if let profileImageURL {
+            return profileImageURL.lastPathComponent
+        }
+        if profileImageSource != nil {
+            return "Profile photo"
+        }
+        return "No profile photo found"
+    }
+
+    private var profileImageDetailText: String {
+        if let profileImageURL {
+            return profileImageURL.displayPath
+        }
+        if profileImageSource != nil {
+            return "Profile photo file not found."
+        }
+        return "No profile photo selected."
+    }
+
     var body: some View {
         GroupBox("Profile Photo") {
             HStack(alignment: .center, spacing: 14) {
                 dropPreview
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(profileImageSource ?? "No profile image found")
+                    Text(profileImageDisplayName)
                         .font(.callout)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .textSelection(.enabled)
 
-                    Text(profileImageURL?.path ?? "Set profileImage in about.md frontmatter.")
+                    Text(profileImageDetailText)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -92,7 +112,7 @@ struct AboutProfilePhotoSection: View {
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.png, .jpeg, .gif, .webP]
-        panel.message = "Choose a web image to copy into public and use as the About profile photo."
+        panel.message = "Choose an image for your profile photo."
 
         if panel.runModal() == .OK, let url = panel.url {
             replaceProfileImage(with: url)

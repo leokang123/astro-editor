@@ -19,7 +19,7 @@ struct SidebarView: View {
             List(selection: selectionBinding) {
                 Label("All Posts", systemImage: "folder")
                     .tag(BlogNodeID.root)
-                    .help("Top level of src/data/blog")
+                    .help("Top level of posts")
                     .foregroundStyle(hasProject ? .primary : .secondary)
                     .disabled(!hasProject)
                     .contextMenu {

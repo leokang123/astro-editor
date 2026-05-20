@@ -172,7 +172,7 @@ struct ContentView: View {
             Divider()
             StatusBar(
                 projectName: store.hasProject ? store.projectRoot.lastPathComponent : "No project selected",
-                projectRootPath: store.projectRoot.path,
+                projectRootPath: store.projectRoot.displayPath,
                 isDirty: store.isDirty,
                 modeText: store.currentDocument == nil ? nil : (store.editorMode == .edit ? "Markdown" : "Preview"),
                 statusText: store.statusText
