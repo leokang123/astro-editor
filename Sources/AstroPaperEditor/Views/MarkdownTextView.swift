@@ -11,6 +11,7 @@ struct MarkdownTextView: NSViewRepresentable {
     var onRegisterSourcePositionProvider: (((() -> Double?)?) -> Void)
     var onInsertImages: ([PastedImage]) -> String
     var onTogglePreview: (() -> Void)?
+    var onEditorReady: () -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
@@ -19,7 +20,8 @@ struct MarkdownTextView: NSViewRepresentable {
             onRegisterBodyProvider: onRegisterBodyProvider,
             onRegisterSourcePositionProvider: onRegisterSourcePositionProvider,
             onInsertImages: onInsertImages,
-            onTogglePreview: onTogglePreview
+            onTogglePreview: onTogglePreview,
+            onEditorReady: onEditorReady
         )
     }
 
@@ -85,6 +87,7 @@ struct MarkdownTextView: NSViewRepresentable {
         if !isActive, textView.window?.firstResponder === textView {
             textView.window?.makeFirstResponder(nil)
         }
+        context.coordinator.onEditorReady = onEditorReady
 
         if context.coordinator.documentID != documentID {
             textView.undoManager?.removeAllActions()
@@ -99,8 +102,7 @@ struct MarkdownTextView: NSViewRepresentable {
             context.coordinator.restoreSourcePosition(targetSourcePosition, for: documentID)
             context.coordinator.clearFocus(for: documentID)
         } else if !context.coordinator.isActive && isActive {
-            context.coordinator.restoreSourcePosition(targetSourcePosition, for: documentID)
-            context.coordinator.restoreSelectionAndFocus(for: documentID)
+            context.coordinator.restoreEditorState(targetSourcePosition, for: documentID)
         }
         context.coordinator.isActive = isActive
         context.coordinator.onTextChange = onTextChange
@@ -130,6 +132,7 @@ struct MarkdownTextView: NSViewRepresentable {
         var onRegisterSourcePositionProvider: (((() -> Double?)?) -> Void)
         var onInsertImages: ([PastedImage]) -> String
         var onTogglePreview: (() -> Void)?
+        var onEditorReady: () -> Void
         var isActive = true
         var savedSelectedRange: NSRange?
         var shouldRestoreFocus = false
@@ -143,7 +146,8 @@ struct MarkdownTextView: NSViewRepresentable {
             onRegisterBodyProvider: @escaping (((() -> String?)?) -> Void),
             onRegisterSourcePositionProvider: @escaping (((() -> Double?)?) -> Void),
             onInsertImages: @escaping ([PastedImage]) -> String,
-            onTogglePreview: (() -> Void)?
+            onTogglePreview: (() -> Void)?,
+            onEditorReady: @escaping () -> Void
         ) {
             self.documentID = documentID
             self.onTextChange = onTextChange
@@ -151,6 +155,7 @@ struct MarkdownTextView: NSViewRepresentable {
             self.onRegisterSourcePositionProvider = onRegisterSourcePositionProvider
             self.onInsertImages = onInsertImages
             self.onTogglePreview = onTogglePreview
+            self.onEditorReady = onEditorReady
         }
 
         func textDidChange(_ notification: Notification) {
@@ -202,6 +207,26 @@ struct MarkdownTextView: NSViewRepresentable {
                 textView.setSelectedRange(NSRange(location: location, length: length))
                 guard self.shouldRestoreFocus else { return }
                 textView.window?.makeFirstResponder(textView)
+            }
+        }
+
+        func restoreEditorState(_ position: Double, for documentID: String) {
+            DispatchQueue.main.async { [weak self, weak scrollView, weak textView] in
+                guard let self, let scrollView, let textView, self.documentID == documentID else { return }
+                let point = textView.pointForSourcePosition(position, lineIndexCache: self.lineIndexCache)
+                scrollView.contentView.scroll(to: point)
+                scrollView.reflectScrolledClipView(scrollView.contentView)
+
+                let textLength = (textView.string as NSString).length
+                let savedRange = self.savedSelectedRange ?? textView.selectedRange()
+                let location = min(savedRange.location, textLength)
+                let length = min(savedRange.length, max(textLength - location, 0))
+                textView.setSelectedRange(NSRange(location: location, length: length))
+
+                if self.shouldRestoreFocus {
+                    textView.window?.makeFirstResponder(textView)
+                }
+                self.onEditorReady()
             }
         }
 

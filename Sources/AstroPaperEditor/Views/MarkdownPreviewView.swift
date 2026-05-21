@@ -8,15 +8,17 @@ struct MarkdownPreviewView: NSViewRepresentable {
     let sourcePosition: Double
     let isActive: Bool
     var onSourcePositionChange: (Double) -> Void
+    var onPreviewReady: () -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onSourcePositionChange: onSourcePositionChange)
+        Coordinator(onSourcePositionChange: onSourcePositionChange, onPreviewReady: onPreviewReady)
     }
 
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.setURLSchemeHandler(context.coordinator.resourceSchemeHandler, forURLScheme: "astro-paper-resource")
         configuration.userContentController.add(context.coordinator, name: "sourcePosition")
+        configuration.userContentController.add(context.coordinator, name: "previewReady")
         configuration.userContentController.addUserScript(WKUserScript(
             source: Self.sourcePositionScript,
             injectionTime: .atDocumentEnd,
@@ -34,10 +36,8 @@ struct MarkdownPreviewView: NSViewRepresentable {
         context.coordinator.sourcePosition = sourcePosition
         context.coordinator.isActive = isActive
         context.coordinator.onSourcePositionChange = onSourcePositionChange
+        context.coordinator.onPreviewReady = onPreviewReady
         context.coordinator.resourceSchemeHandler.projectRoot = projectRoot.standardizedFileURL
-        if didChangeActiveState {
-            context.coordinator.setPreviewActive(isActive, in: webView)
-        }
         let metadataKey = [
             document.fileURL.path,
             document.frontmatter.title,
@@ -45,6 +45,13 @@ struct MarkdownPreviewView: NSViewRepresentable {
         ].joined(separator: "\u{1F}")
 
         guard context.coordinator.metadataKey != metadataKey || context.coordinator.body != document.body else {
+            if didChangeActiveState {
+                context.coordinator.setPreviewActive(isActive, in: webView)
+                if isActive {
+                    context.coordinator.scrollToSourcePosition(in: webView)
+                }
+                return
+            }
             if previousSourcePosition != sourcePosition {
                 if context.coordinator.didReportSourcePosition(sourcePosition) {
                     context.coordinator.clearReportedSourcePosition()
@@ -57,12 +64,16 @@ struct MarkdownPreviewView: NSViewRepresentable {
         context.coordinator.metadataKey = metadataKey
         context.coordinator.body = document.body
 
+        if didChangeActiveState {
+            context.coordinator.setPreviewActive(isActive, in: webView)
+        }
         let html = MarkdownPreviewHTMLRenderer(document: document, projectRoot: projectRoot).html()
         webView.loadHTMLString(html, baseURL: projectRoot)
     }
 
     static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
         webView.configuration.userContentController.removeScriptMessageHandler(forName: "sourcePosition")
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: "previewReady")
     }
 
     private static let sourcePositionScript = """
@@ -216,10 +227,12 @@ struct MarkdownPreviewView: NSViewRepresentable {
         var isActive = false
         var reportedSourcePosition: Double?
         var onSourcePositionChange: (Double) -> Void
+        var onPreviewReady: () -> Void
         let resourceSchemeHandler = PreviewResourceSchemeHandler()
 
-        init(onSourcePositionChange: @escaping (Double) -> Void) {
+        init(onSourcePositionChange: @escaping (Double) -> Void, onPreviewReady: @escaping () -> Void) {
             self.onSourcePositionChange = onSourcePositionChange
+            self.onPreviewReady = onPreviewReady
         }
 
         func webView(
@@ -238,11 +251,14 @@ struct MarkdownPreviewView: NSViewRepresentable {
         }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-            guard message.name == "sourcePosition" else { return }
-            if let position = message.body as? Double {
+            if message.name == "previewReady" {
+                if isActive {
+                    onPreviewReady()
+                }
+            } else if message.name == "sourcePosition", let position = message.body as? Double {
                 reportedSourcePosition = position
                 onSourcePositionChange(position)
-            } else if let number = message.body as? NSNumber {
+            } else if message.name == "sourcePosition", let number = message.body as? NSNumber {
                 let position = number.doubleValue
                 reportedSourcePosition = position
                 onSourcePositionChange(position)
@@ -302,6 +318,7 @@ struct MarkdownPreviewView: NSViewRepresentable {
                       scrollToTargetPosition();
                       scrollSync?.endRestore();
                       reveal();
+                      window.webkit.messageHandlers.previewReady.postMessage(true);
                     }, 120);
                   });
                 });

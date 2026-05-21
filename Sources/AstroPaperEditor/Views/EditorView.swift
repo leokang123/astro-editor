@@ -1,6 +1,9 @@
 import SwiftUI
 
 struct EditorView: View {
+    @State private var previewReadyDocumentID: String?
+    @State private var editorReadyDocumentID: String?
+
     let document: BlogDocument?
     let hasProject: Bool
     let editorMode: EditorMode
@@ -22,6 +25,10 @@ struct EditorView: View {
             if let document {
                 let documentID = document.fileURL.path
                 let shouldMountPreview = editorMode == .preview || previewDocumentID == documentID
+                let previewIsReady = previewReadyDocumentID == documentID
+                let editorIsReady = editorReadyDocumentID == documentID
+                let shouldShowPreview = previewIsReady && (editorMode == .preview || !editorIsReady)
+                let shouldShowEditor = !shouldShowPreview
                 VStack(spacing: 0) {
                     HStack {
                         Image(systemName: "doc.text")
@@ -63,10 +70,14 @@ struct EditorView: View {
                                     isActive: editorMode == .preview,
                                     onSourcePositionChange: { position in
                                         onSourcePositionChange(position)
+                                    },
+                                    onPreviewReady: {
+                                        guard editorMode == .preview else { return }
+                                        previewReadyDocumentID = documentID
                                     }
                                 )
-                                .opacity(editorMode == .preview ? 1 : 0)
-                                .allowsHitTesting(editorMode == .preview)
+                                .opacity(shouldShowPreview ? 1 : 0)
+                                .allowsHitTesting(shouldShowPreview)
                                 .accessibilityHidden(editorMode != .preview)
                             }
 
@@ -89,13 +100,29 @@ struct EditorView: View {
                                 },
                                 onTogglePreview: {
                                     onTogglePreview()
+                                },
+                                onEditorReady: {
+                                    guard editorMode == .edit else { return }
+                                    editorReadyDocumentID = documentID
+                                    previewReadyDocumentID = nil
                                 }
                             )
-                            .opacity(editorMode == .edit ? 1 : 0)
-                            .allowsHitTesting(editorMode == .edit)
+                            .opacity(shouldShowEditor ? 1 : 0)
+                            .allowsHitTesting(editorMode == .edit && shouldShowEditor)
                             .accessibilityHidden(editorMode != .edit)
                         }
                         .frame(maxWidth: contentMaxWidth)
+                    }
+                }
+                .onChange(of: documentID) { _ in
+                    previewReadyDocumentID = nil
+                    editorReadyDocumentID = nil
+                }
+                .onChange(of: editorMode) { mode in
+                    if mode == .preview {
+                        previewReadyDocumentID = nil
+                    } else {
+                        editorReadyDocumentID = nil
                     }
                 }
             } else if hasProject {
