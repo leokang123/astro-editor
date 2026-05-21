@@ -132,6 +132,7 @@ struct MarkdownTextView: NSViewRepresentable {
         var onTogglePreview: (() -> Void)?
         var isActive = true
         var savedSelectedRange: NSRange?
+        var shouldRestoreFocus = false
         private let lineIndexCache = SourceLineIndexCache()
         weak var scrollView: NSScrollView?
         weak var textView: NSTextView?
@@ -174,12 +175,19 @@ struct MarkdownTextView: NSViewRepresentable {
         }
 
         func rememberSelection() {
-            savedSelectedRange = textView?.selectedRange()
+            guard let textView else {
+                savedSelectedRange = nil
+                shouldRestoreFocus = false
+                return
+            }
+            savedSelectedRange = textView.selectedRange()
+            shouldRestoreFocus = textView.window?.firstResponder === textView
         }
 
         func resetDocument(id: String) {
             documentID = id
             savedSelectedRange = nil
+            shouldRestoreFocus = false
             lineIndexCache.invalidate()
         }
 
@@ -192,6 +200,7 @@ struct MarkdownTextView: NSViewRepresentable {
                 let length = min(savedRange.length, max(textLength - location, 0))
 
                 textView.setSelectedRange(NSRange(location: location, length: length))
+                guard self.shouldRestoreFocus else { return }
                 textView.window?.makeFirstResponder(textView)
             }
         }
