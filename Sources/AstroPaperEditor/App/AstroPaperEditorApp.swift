@@ -96,14 +96,16 @@ enum EditorCommandDispatcher {
         }
     }
 
-    static func performTextFinderAction(_ action: NSTextFinder.Action) -> Bool {
+    static func performTextFinderAction(_ action: NSTextFinder.Action, focusTextView: Bool = true) -> Bool {
         guard let textView = NSApp.keyWindow?.contentView?.firstDescendant(ofType: PasteAwareTextView.self) else {
             return false
         }
 
         let sender = NSMenuItem()
         sender.tag = action.rawValue
-        textView.window?.makeFirstResponder(textView)
+        if focusTextView {
+            textView.window?.makeFirstResponder(textView)
+        }
         textView.performTextFinderAction(sender)
         return true
     }

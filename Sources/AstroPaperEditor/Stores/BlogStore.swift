@@ -382,7 +382,7 @@ final class BlogStore: ObservableObject {
     }
 
     private func hideEditorFindInterface() {
-        _ = EditorCommandDispatcher.performTextFinderAction(.hideFindInterface)
+        _ = EditorCommandDispatcher.performTextFinderAction(.hideFindInterface, focusTextView: false)
     }
 
     func requestNewCategory(parentID: String? = nil) {
