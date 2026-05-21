@@ -1,55 +1,161 @@
 # AstroPaperEditor
 
-A lightweight macOS editor for AstroPaper blogs.
+A focused macOS editor for AstroPaper blogs.
 
-AstroPaperEditor is not a general-purpose note app. It is a focused local file editor that keeps posts inside AstroPaper's `src/data/blog` folder structure, reduces repetitive frontmatter work, and lets the original Markdown files stay visible on disk.
+AstroPaperEditor is a local file editor, not a database-backed writing app. It opens an AstroPaper project, reads posts from `src/data/blog`, edits Markdown and frontmatter, and leaves the project as normal files on disk.
 
-![AstroPaperEditor markdown editor](docs/images/editor.png)
+![AstroPaperEditor preview mode](docs/images/preview-mode.png)
 
-## What It Does
+## Download
 
-- Shows the `src/data/blog` folder tree as the blog category structure
-- Treats folders as categories and `.md` files as posts
-- Creates new categories, subcategories, and Markdown posts
-- Generates AstroPaper-compatible frontmatter for new documents
-- Edits Markdown body content without autosaving
-- Provides a frontmatter inspector for title, description, dates, tags, and preserved extra fields
-- Supports manual save with `Command + S`
-- Updates `modDatetime` only when saving
-- Supports edit and preview modes with `Command + E`
-- Renders Markdown preview with tables, local images, Mermaid, and LaTeX support
-- Opens the editor find UI from preview with `Command + F`
-- Saves pasted or dropped images into `src/assets/images`
-- Replaces the About page profile image from Preferences
-- Shows featured posts from the toolbar
-- Keeps `Command + N` inside the existing editor window
-- Commits and pushes the selected blog project to trigger GitHub Pages deployment
-- Configures Git remote and branch from Preferences
-- Keeps Docker build as a manual developer-only action in Preferences
-- Opens the configured `USER_SITE.website` URL in the default browser
-- Provides Preferences for About page, Home settings, and social links
+Download the latest build from GitHub Releases:
 
-![AstroPaperEditor preview mode](docs/images/preview.png)
+[AstroPaperEditor releases](https://github.com/leokang123/astro-editor/releases)
 
-## Design Goals
+The release includes:
 
-AstroPaperEditor is built around a few strict rules:
+- `AstroPaperEditor-v0.4.0.dmg`
+- `AstroPaperEditor-v0.4.0.zip`
 
-- No database
-- No autosave
-- No automatic builds
-- No background file watcher
-- No always-on full-text indexing
-- Scan the blog tree once at launch or on manual reload
-- Read a document only when it is selected
-- Keep edits in memory until the user saves
-- Ask before discarding unsaved changes
+Open the DMG and move `AstroPaperEditor.app` to your Applications folder.
 
-The point is to make it difficult to accidentally break the AstroPaper structure while keeping the project as normal files that can still be edited in Finder or another editor.
+## macOS Security Notice
 
-## Expected AstroPaper Layout
+AstroPaperEditor is not notarized yet, so macOS may block it the first time you open it.
 
-The app expects an AstroPaper project with this post root:
+If this happens:
+
+1. Try opening `AstroPaperEditor.app` once.
+2. When macOS blocks it, open **System Settings**.
+3. Go to **Privacy & Security**.
+4. Scroll to the bottom of the page.
+5. Click **Open Anyway** for AstroPaperEditor.
+6. Confirm the prompt to launch the app.
+
+Only use **Open Anyway** if you downloaded the app from this repository's official GitHub Releases page.
+
+## What It Is For
+
+AstroPaperEditor is built for editing an AstroPaper v5-style blog project from a native macOS app.
+
+It helps with:
+
+- Opening an existing AstroPaper project folder
+- Creating a new starter project in an empty folder
+- Browsing `src/data/blog` as a post/category tree
+- Creating categories and Markdown posts
+- Editing Markdown body text
+- Previewing rendered posts locally inside the app
+- Editing title, description, dates, tags, and featured status
+- Managing About, Home, Social, Assets, Git, and Developer settings
+- Opening the generated site in the browser
+
+It intentionally does not use a database or autosave. Files are read when selected, edited in memory, and written when you save.
+
+## Start A Project
+
+Open AstroPaperEditor and choose an AstroPaper project folder. If the selected folder is empty, the app can create a starter project for you.
+
+![Open project screen](docs/images/open-project.png)
+
+Choose or create a folder for the project.
+
+![Choose project folder](docs/images/choose-folder.png)
+
+If the folder is empty, create a new AstroPaper project from the bundled starter.
+
+![Create project dialog](docs/images/create-project.png)
+
+## Edit Posts
+
+Folders under `src/data/blog` appear as categories in the sidebar. Markdown files appear as posts.
+
+![Markdown editor](docs/images/edit-mode.png)
+
+The editor keeps the Markdown file structure visible:
+
+```text
+src/data/blog/
+  examples/
+    welcome.md
+```
+
+Use the sidebar to select a post, edit the Markdown body in the center, and update frontmatter from the inspector on the right.
+
+Useful shortcuts:
+
+- `Command + N`: create a new post
+- `Command + S`: save the current document
+- `Command + E`: switch between Edit and Preview
+- `Command + F`: open Find, including from Preview mode
+
+## Preview Posts
+
+Preview mode renders the current Markdown post inside the app.
+
+![Rendered post preview](docs/images/preview-mode.png)
+
+The preview supports common Markdown output, local images, tables, Mermaid diagrams, and math rendering when the project includes the required AstroPaper assets.
+
+## Site Output
+
+AstroPaperEditor edits the local project. The actual website is still generated by AstroPaper.
+
+![Generated AstroPaper site](docs/images/site-preview.png)
+
+Use **Open Website** from the app when you want to open the configured site URL in your browser.
+
+## Preferences
+
+Project preferences show the important local paths and editor options.
+
+![Project preferences](docs/images/preferences-project.png)
+
+### About
+
+Edit the About page body and replace the profile image.
+
+![About preferences](docs/images/preferences-about.png)
+
+### Home
+
+Edit site title, description, author, website URL, profile URL, and home page labels.
+
+![Home preferences](docs/images/preferences-home.png)
+
+### Social
+
+Enable and configure social links used by the AstroPaper site.
+
+![Social preferences](docs/images/preferences-social.png)
+
+### Assets
+
+Scan site images and move unused files to the macOS Trash.
+
+![Asset preferences](docs/images/preferences-assets.png)
+
+Unused images are not permanently deleted.
+
+### Git
+
+Configure the Git repository used by Commit & Push.
+
+![Git preferences](docs/images/preferences-git.png)
+
+The app can initialize a repository, set a remote, and push the selected project when you are ready to deploy.
+
+### Developer
+
+Run the manual Docker preview build for local development checks.
+
+![Developer preferences](docs/images/preferences-developer.png)
+
+Docker build is intentionally manual. The app does not run background builds automatically.
+
+## Expected Project Layout
+
+AstroPaperEditor expects this post root:
 
 ```text
 src/data/blog/
@@ -58,61 +164,24 @@ src/data/blog/
 Folder paths become category paths. For example:
 
 ```text
-src/data/blog/대학교/1학년/컴퓨터개론/첫-번째-노트.md
+src/data/blog/network/tcp.md
 ```
 
-is treated as:
+is shown as:
 
 ```text
-대학교 -> 1학년 -> 컴퓨터개론 -> 첫 번째 노트
+network -> tcp
 ```
 
-## Site Settings
-
-Home and social settings are edited through a small dedicated JSON settings file:
+The app also reads and writes site settings through:
 
 ```text
 src/user-settings.json
 ```
 
-`src/config.ts` and `src/constants.ts` should import this JSON file directly. This keeps AstroPaper's normal config files simple while giving the macOS app one predictable data file to edit.
-If `src/user-settings.json` is missing, AstroPaperEditor creates a starter file the first time the settings are loaded.
+If `src/user-settings.json` is missing, AstroPaperEditor creates a starter file when settings are loaded.
 
-Example shape:
-
-```json
-{
-  "USER_SITE": {
-    "website": "http://localhost:4321/",
-    "author": "Jeonghoon",
-    "profile": "http://localhost:4321/about/",
-    "desc": "Personal technical notes",
-    "title": "Home Server Notes",
-    "postPerIndex": 4,
-    "postPerPage": 4,
-    "home": {
-      "title": "Home Server Notes",
-      "description": ["Study notes and project logs."],
-      "readMore": {
-        "text": "Read the blog posts or check",
-        "linkText": "README",
-        "href": "https://github.com/satnaing/astro-paper#readme"
-      },
-      "socialLabel": "Social Links:",
-      "allPostsText": "All Posts"
-    }
-  },
-  "USER_SOCIALS": [
-    {
-      "name": "GitHub",
-      "enabled": true,
-      "href": "https://github.com/username"
-    }
-  ]
-}
-```
-
-## Build And Run
+## Build From Source
 
 This is a Swift Package based macOS app.
 
@@ -128,42 +197,36 @@ Run as an app bundle:
 ./script/build_and_run.sh
 ```
 
-Create a distributable local app bundle:
+Create a local app bundle:
 
 ```bash
 ./script/package_app.sh
 ```
 
-Create GitHub release assets for the current app version:
+Create release assets:
 
 ```bash
 ./script/create_release_assets.sh
 ```
 
-The generated app bundle is written to:
+Generated files are written to:
 
 ```text
-dist/AstroPaperEditor.app
+dist/
 ```
-
-## Default Blog Path
-
-The app is currently set up for this local AstroPaper project path:
-
-```text
-/Users/jeonghoon/Desktop/공부목록/blog
-```
-
-You can choose another AstroPaper project folder from inside the app.
 
 ## Requirements
 
 - macOS
-- Swift toolchain / Xcode command line tools
-- AstroPaper blog project
-- Git, if you want to use Commit & Push
-- Docker, if you want to use the manual Developer build action
+- An AstroPaper project, or an empty folder for a new starter project
+- Git, if you want Commit & Push
+- Docker, only if you want the manual local preview build
+- Swift toolchain / Xcode command line tools, only if building from source
 
-## Current Status
+## Status
 
-This is a focused personal tool for editing an AstroPaper blog. The core editing, preview, frontmatter, image insertion, settings, and build workflows are implemented, but the app is intentionally small and local-first.
+AstroPaperEditor is a small local-first tool for editing AstroPaper blogs. It is intentionally conservative: no database, no autosave, no background watcher, and no automatic build process.
+
+## Acknowledgement
+
+AstroPaperEditor was developed with help from OpenAI Codex.
