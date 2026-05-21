@@ -1,11 +1,10 @@
 import SwiftUI
 
 struct EditorView: View {
-    @State private var previewDocumentID: String?
-
     let document: BlogDocument?
     let hasProject: Bool
     let editorMode: EditorMode
+    let previewDocumentID: String?
     let editorSourcePosition: Double
     let projectRoot: URL
     var onOpenProject: () -> Void
@@ -41,9 +40,6 @@ struct EditorView: View {
                             .help("Discard this unavailable document and return to the project picker")
                         }
                         Button {
-                            if editorMode == .edit {
-                                previewDocumentID = documentID
-                            }
                             onTogglePreview()
                         } label: {
                             Label(editorMode == .edit ? "Preview" : "Edit", systemImage: editorMode == .edit ? "doc.richtext" : "pencil")
@@ -96,9 +92,6 @@ struct EditorView: View {
                                     onInsertImages(images)
                                 },
                                 onTogglePreview: {
-                                    if editorMode == .edit {
-                                        previewDocumentID = documentID
-                                    }
                                     onTogglePreview()
                                 }
                             )
@@ -108,14 +101,6 @@ struct EditorView: View {
                         }
                         .frame(maxWidth: contentMaxWidth)
                     }
-                }
-                .onChange(of: editorMode) { mode in
-                    if mode == .preview {
-                        previewDocumentID = documentID
-                    }
-                }
-                .onChange(of: documentID) { _ in
-                    previewDocumentID = editorMode == .preview ? documentID : nil
                 }
             } else if hasProject {
                 VStack(spacing: 12) {

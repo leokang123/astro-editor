@@ -21,6 +21,7 @@ final class BlogStore: ObservableObject {
     @Published var isAssetOptimizeRunning = false
     @Published var message: AppMessage?
     @Published var editorMode: EditorMode = .edit
+    @Published private(set) var previewDocumentID: String?
     @Published var activeSheet: ActiveSheet?
     @Published var creationParentID: String?
     @Published var actionNodeID: String?
@@ -360,6 +361,7 @@ final class BlogStore: ObservableObject {
 
     func toggleEditorMode() {
         guard canTogglePreview else { return }
+        previewDocumentID = currentDocument?.fileURL.path
         if editorMode == .edit {
             hideEditorFindInterface()
             captureEditorSourcePosition()
@@ -1043,6 +1045,7 @@ final class BlogStore: ObservableObject {
 
     private func closeCurrentDocument() {
         currentDocument = nil
+        previewDocumentID = nil
         documentSession.close()
         isDirty = false
     }

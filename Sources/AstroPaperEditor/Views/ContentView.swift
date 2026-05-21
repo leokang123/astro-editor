@@ -141,6 +141,7 @@ struct ContentView: View {
                     document: store.currentDocument,
                     hasProject: store.hasProject,
                     editorMode: store.editorMode,
+                    previewDocumentID: store.previewDocumentID,
                     editorSourcePosition: store.editorSourcePosition,
                     projectRoot: store.projectRoot,
                     onOpenProject: store.chooseProjectFolder,
