@@ -28,7 +28,7 @@ struct EditorView: View {
                 let previewIsReady = previewReadyDocumentID == documentID
                 let editorIsReady = editorReadyDocumentID == documentID
                 let shouldShowPreview = previewIsReady && (editorMode == .preview || !editorIsReady)
-                let shouldShowEditor = !shouldShowPreview
+                let shouldShowEditor = editorMode == .preview ? (!previewIsReady && editorIsReady) : (!previewIsReady || editorIsReady)
                 VStack(spacing: 0) {
                     HStack {
                         Image(systemName: "doc.text")
@@ -121,6 +121,7 @@ struct EditorView: View {
                 .onChange(of: editorMode) { mode in
                     if mode == .preview {
                         previewReadyDocumentID = nil
+                        editorReadyDocumentID = documentID
                     } else {
                         editorReadyDocumentID = nil
                     }

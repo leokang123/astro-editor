@@ -284,42 +284,40 @@ struct MarkdownPreviewView: NSViewRepresentable {
               const targetPosition = \(position);
               const scrollSync = window.astroPaperScrollSync;
               const reveal = () => document.body.classList.add("preview-ready");
+              const revealReady = () => {
+                reveal();
+                window.webkit.messageHandlers.previewReady.postMessage(true);
+              };
               const restoreToken = scrollSync?.beginRestore();
               const shouldRestore = () => scrollSync?.isRestoreTokenActive(restoreToken) !== false;
-              const waitForImages = () => {
-                const images = Array.from(document.images).filter(image => !image.complete);
-                if (!images.length) return Promise.resolve();
-                return new Promise(resolve => {
-                  let remaining = images.length;
-                  const finish = () => {
-                    remaining -= 1;
-                    if (remaining <= 0) resolve();
-                  };
-                  window.setTimeout(resolve, 500);
-                  for (const image of images) {
-                    image.addEventListener("load", finish, { once: true });
-                    image.addEventListener("error", finish, { once: true });
-                  }
-                });
-              };
               const scrollToTargetPosition = () => {
                 if (!shouldRestore()) return;
                 scrollSync?.scrollToSourcePosition(targetPosition);
               };
+              const finishRestore = () => {
+                if (!shouldRestore()) return;
+                scrollToTargetPosition();
+                scrollSync?.endRestore();
+              };
+              const correctAfterImages = () => {
+                for (const image of Array.from(document.images).filter(image => !image.complete)) {
+                  image.addEventListener("load", scrollToTargetPosition, { once: true });
+                  image.addEventListener("error", scrollToTargetPosition, { once: true });
+                }
+              };
+              scrollToTargetPosition();
+              requestAnimationFrame(() => {
+                scrollToTargetPosition();
+                revealReady();
+                correctAfterImages();
+                window.setTimeout(finishRestore, 160);
+              });
               Promise.resolve(window.previewEnhancementsReady)
                 .catch(() => {})
-                .then(waitForImages)
-                .catch(() => {})
                 .finally(() => {
-                  scrollToTargetPosition();
                   requestAnimationFrame(() => {
                     scrollToTargetPosition();
-                    window.setTimeout(() => {
-                      scrollToTargetPosition();
-                      scrollSync?.endRestore();
-                      reveal();
-                      window.webkit.messageHandlers.previewReady.postMessage(true);
-                    }, 120);
+                    window.setTimeout(finishRestore, 40);
                   });
                 });
             })();
