@@ -253,7 +253,9 @@ struct MarkdownPreviewView: NSViewRepresentable {
 
         func setPreviewActive(_ isActive: Bool, in webView: WKWebView) {
             let script = "window.astroPaperScrollSync?.setActive(\(isActive ? "true" : "false"));"
-            webView.evaluateJavaScript(script)
+            DispatchQueue.main.async {
+                webView.evaluateJavaScript(script)
+            }
         }
 
         func scrollToSourcePosition(in webView: WKWebView) {

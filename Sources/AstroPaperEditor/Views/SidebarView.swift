@@ -97,7 +97,11 @@ struct SidebarView: View {
     private var selectionBinding: Binding<String?> {
         Binding(
             get: { selectionID },
-            set: { onSelectNode($0) }
+            set: { id in
+                DispatchQueue.main.async {
+                    onSelectNode(id)
+                }
+            }
         )
     }
 }
