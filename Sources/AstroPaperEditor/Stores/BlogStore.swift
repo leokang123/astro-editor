@@ -308,6 +308,7 @@ final class BlogStore: ObservableObject {
         guard currentDocument != nil else { return }
         captureEditorSourcePosition()
         flushSessionDraftsToCurrentDocument()
+        previewDocumentID = nil
         if editorMode == .preview {
             editorMode = .edit
         }
