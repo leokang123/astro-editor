@@ -559,7 +559,7 @@ struct MarkdownPreviewHTMLRenderer {
                 .appendingPathComponent(String(source.dropFirst()))
         }
 
-        return nil
+        return URL(fileURLWithPath: source, relativeTo: document.fileURL.deletingLastPathComponent()).standardizedFileURL
     }
 
     private func escapeHTML(_ text: String) -> String {

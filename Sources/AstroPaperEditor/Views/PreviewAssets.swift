@@ -64,13 +64,57 @@ struct PreviewAssets {
             guard let stylesheet = Self.cachedText(for: url) else {
                 return fallbackTag(for: relativePath, kind: kind)
             }
-            return "<style>\n\(stylesheet.replacingOccurrences(of: "</style>", with: "<\\/style>"))\n</style>"
+            let rewrittenStylesheet = rewriteStylesheetResourceURLs(stylesheet, relativeTo: url.deletingLastPathComponent())
+            return "<style>\n\(rewrittenStylesheet.replacingOccurrences(of: "</style>", with: "<\\/style>"))\n</style>"
         case .script:
             guard let script = Self.cachedText(for: url) else {
                 return fallbackTag(for: relativePath, kind: kind)
             }
             return "<script>\n\(script.replacingOccurrences(of: "</script>", with: "<\\/script>"))\n</script>"
         }
+    }
+
+    private func rewriteStylesheetResourceURLs(_ stylesheet: String, relativeTo directory: URL) -> String {
+        let range = NSRange(stylesheet.startIndex..<stylesheet.endIndex, in: stylesheet)
+        let matches = Self.stylesheetURLRegex.matches(in: stylesheet, range: range).reversed()
+        var rewritten = stylesheet
+
+        for match in matches {
+            guard match.numberOfRanges >= 3,
+                  let urlRange = Range(match.range(at: 2), in: rewritten),
+                  let fullRange = Range(match.range(at: 0), in: rewritten) else {
+                continue
+            }
+
+            let value = String(rewritten[urlRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard shouldRewriteStylesheetURL(value) else { continue }
+
+            let fileURL = URL(fileURLWithPath: value, relativeTo: directory).standardizedFileURL
+            guard isInsideProject(fileURL) else { continue }
+
+            let quote = match.range(at: 1).location == NSNotFound
+                ? ""
+                : Range(match.range(at: 1), in: rewritten).map { String(rewritten[$0]) } ?? ""
+            rewritten.replaceSubrange(fullRange, with: "url(\(quote)\(Self.localResourceURLString(for: fileURL))\(quote))")
+        }
+
+        return rewritten
+    }
+
+    private func shouldRewriteStylesheetURL(_ value: String) -> Bool {
+        !value.isEmpty
+            && !value.hasPrefix("/")
+            && !value.hasPrefix("#")
+            && !value.hasPrefix("data:")
+            && !value.hasPrefix("http://")
+            && !value.hasPrefix("https://")
+            && !value.hasPrefix("astro-paper-resource:")
+    }
+
+    private func isInsideProject(_ url: URL) -> Bool {
+        let filePath = url.standardizedFileURL.path
+        let projectPath = projectRoot.standardizedFileURL.path
+        return filePath == projectPath || filePath.hasPrefix(projectPath + "/")
     }
 
     private static func cachedText(for url: URL) -> String? {
@@ -113,5 +157,13 @@ struct PreviewAssets {
         case script
     }
 
+    private static func localResourceURLString(for url: URL) -> String {
+        var components = URLComponents()
+        components.scheme = "astro-paper-resource"
+        components.path = url.standardizedFileURL.path
+        return components.url?.absoluteString ?? url.absoluteString
+    }
+
+    private static let stylesheetURLRegex = try! NSRegularExpression(pattern: #"url\(\s*(['"]?)([^'")]+)\1\s*\)"#)
     private static let scriptCache = NSCache<NSString, NSString>()
 }

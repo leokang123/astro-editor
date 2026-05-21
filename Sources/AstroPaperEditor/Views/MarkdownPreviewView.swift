@@ -30,11 +30,14 @@ struct MarkdownPreviewView: NSViewRepresentable {
 
     func updateNSView(_ webView: WKWebView, context: Context) {
         let previousSourcePosition = context.coordinator.sourcePosition
+        let didChangeActiveState = context.coordinator.isActive != isActive
         context.coordinator.sourcePosition = sourcePosition
         context.coordinator.isActive = isActive
         context.coordinator.onSourcePositionChange = onSourcePositionChange
         context.coordinator.resourceSchemeHandler.projectRoot = projectRoot.standardizedFileURL
-        context.coordinator.setPreviewActive(isActive, in: webView)
+        if didChangeActiveState {
+            context.coordinator.setPreviewActive(isActive, in: webView)
+        }
         let metadataKey = [
             document.fileURL.path,
             document.frontmatter.title,
@@ -370,6 +373,14 @@ final class PreviewResourceSchemeHandler: NSObject, WKURLSchemeHandler {
             return "image/webp"
         case "heic":
             return "image/heic"
+        case "woff2":
+            return "font/woff2"
+        case "woff":
+            return "font/woff"
+        case "ttf":
+            return "font/ttf"
+        case "otf":
+            return "font/otf"
         default:
             return "image/png"
         }
