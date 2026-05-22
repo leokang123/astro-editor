@@ -71,6 +71,18 @@ final class BlogStore: ObservableObject {
         siteSettingsService.userSettingsURL(for: projectRoot)
     }
 
+    var faviconURL: URL {
+        projectRoot
+            .appendingPathComponent("public", isDirectory: true)
+            .appendingPathComponent("favicon.svg")
+    }
+
+    var defaultOGImageURL: URL {
+        projectRoot
+            .appendingPathComponent("public", isDirectory: true)
+            .appendingPathComponent("astropaper-og.jpg")
+    }
+
     var canSave: Bool {
         hasProject && currentDocument != nil && isDirty
     }
@@ -656,6 +668,18 @@ final class BlogStore: ObservableObject {
 
     func copyAboutProfileImage(from sourceURL: URL) throws -> String {
         try imageService.copyAboutProfileImage(from: sourceURL, inProjectRoot: projectRoot)
+    }
+
+    func replaceFavicon(from sourceURL: URL) throws {
+        try imageService.replacePublicFile(named: "favicon.svg", from: sourceURL, inProjectRoot: projectRoot)
+    }
+
+    func replaceDefaultOGImage(from sourceURL: URL) throws {
+        try imageService.replacePublicFile(named: "astropaper-og.jpg", from: sourceURL, inProjectRoot: projectRoot)
+    }
+
+    func stageTemporaryFile(from sourceURL: URL, filename: String) throws -> URL {
+        try imageService.stageTemporaryFile(from: sourceURL, filename: filename)
     }
 
     func runBuild() {

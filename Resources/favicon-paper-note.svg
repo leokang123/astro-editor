@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title>Paper note favicon</title>
+  <rect x="14" y="7" width="38" height="50" rx="6" fill="#f8fafc"/>
+  <path d="M46 7v13h6z" fill="#dbeafe"/>
+  <path d="M46 7v9c0 2.2 1.8 4 4 4h2" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/>
+  <rect x="14" y="7" width="38" height="50" rx="6" fill="none" stroke="#1e293b" stroke-width="4"/>
+  <path d="M23 25h20M23 34h18M23 43h13" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/>
+  <path d="M14 18h-4M14 30h-4M14 42h-4" stroke="#64748b" stroke-width="4" stroke-linecap="round"/>
+</svg>

@@ -36,19 +36,39 @@ struct ImageService {
     }
 
     func copyAboutProfileImage(from sourceURL: URL, inProjectRoot projectRoot: URL) throws -> String {
+        let fileExtension = normalizedExtension(sourceURL.pathExtension)
+        let filename = "about-profile.\(fileExtension)"
+        let destination = try copyReplacingPublicFile(named: filename, from: sourceURL, inProjectRoot: projectRoot)
+
+        return "/" + destination.lastPathComponent
+    }
+
+    func replacePublicFile(named filename: String, from sourceURL: URL, inProjectRoot projectRoot: URL) throws {
+        _ = try copyReplacingPublicFile(named: filename, from: sourceURL, inProjectRoot: projectRoot)
+    }
+
+    private func copyReplacingPublicFile(named filename: String, from sourceURL: URL, inProjectRoot projectRoot: URL) throws -> URL {
         let publicDirectory = projectRoot.appendingPathComponent("public", isDirectory: true)
         try FileManager.default.createDirectory(at: publicDirectory, withIntermediateDirectories: true)
 
-        let fileExtension = normalizedExtension(sourceURL.pathExtension)
-        let destination = publicDirectory.appendingPathComponent("about-profile.\(fileExtension)")
+        let destination = publicDirectory.appendingPathComponent(filename)
         if sourceURL.standardizedFileURL.path != destination.standardizedFileURL.path {
             if FileManager.default.fileExists(atPath: destination.path) {
                 try FileManager.default.removeItem(at: destination)
             }
             try FileManager.default.copyItem(at: sourceURL, to: destination)
         }
+        return destination
+    }
 
-        return "/" + destination.lastPathComponent
+    func stageTemporaryFile(from sourceURL: URL, filename: String) throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AstroPaperEditorStagedImages", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let destination = directory.appendingPathComponent("\(UUID().uuidString)-\(filename)")
+        try FileManager.default.copyItem(at: sourceURL, to: destination)
+        return destination
     }
 
     private func assetImageDirectory(inProjectRoot projectRoot: URL) throws -> URL {

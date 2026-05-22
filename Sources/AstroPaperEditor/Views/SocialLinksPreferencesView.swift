@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SocialLinksPreferencesView: View {
     @ObservedObject var store: BlogStore
+    @ObservedObject var closeState: SettingsCloseState
     @State private var settings: HomeSettings?
     @State private var lastLoaded: HomeSettings?
     @State private var message = ""
@@ -101,6 +102,12 @@ struct SocialLinksPreferencesView: View {
             .font(.caption)
         }
         .onAppear {
+            closeState.register(
+                id: "social",
+                hasUnsaved: { isDirty },
+                save: { save() },
+                discard: discard
+            )
             if store.hasProject, settings == nil {
                 reload()
             }
@@ -175,16 +182,23 @@ struct SocialLinksPreferencesView: View {
         message = ""
     }
 
-    private func save() {
-        guard store.hasProject else { return }
-        guard let settings else { return }
+    @discardableResult
+    private func save() -> Bool {
+        guard store.hasProject else { return false }
+        guard let settings else { return false }
         do {
             try store.writeSocialSettings(settings)
             lastLoaded = settings
             message = "Saved social links"
+            return true
         } catch {
             message = error.localizedDescription
+            return false
         }
+    }
+
+    private func discard() {
+        settings = lastLoaded
     }
 
     private func iconName(for name: String) -> String {

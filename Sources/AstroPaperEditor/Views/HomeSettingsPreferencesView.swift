@@ -1,15 +1,18 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct HomeSettingsPreferencesView: View {
     @ObservedObject var store: BlogStore
+    @ObservedObject var siteImageDraft: SiteImageDraft
+    @ObservedObject var closeState: SettingsCloseState
     @State private var settings: HomeSettings?
     @State private var lastLoaded: HomeSettings?
     @State private var descriptionDraft = ""
     @State private var message = ""
 
     private var isDirty: Bool {
-        settings != lastLoaded
+        settings != lastLoaded || siteImageDraft.hasUnsaved
     }
 
     var body: some View {
@@ -89,6 +92,12 @@ struct HomeSettingsPreferencesView: View {
             .font(.caption)
         }
         .onAppear {
+            closeState.register(
+                id: "home",
+                hasUnsaved: { isDirty },
+                save: { save() },
+                discard: discard
+            )
             if store.hasProject, settings == nil {
                 reload()
             }
@@ -99,6 +108,7 @@ struct HomeSettingsPreferencesView: View {
             }
         }
         .onChange(of: store.projectRoot) { _ in
+            siteImageDraft.clear()
             reset()
             if store.hasProject {
                 reload()
@@ -122,8 +132,36 @@ struct HomeSettingsPreferencesView: View {
                     textFieldRow("Posts on home", \.postPerIndex)
                     textFieldRow("Posts per page", \.postPerPage)
                 }
+
+                Divider()
+
+                siteImagesSection
             }
             .padding(8)
+        }
+    }
+
+    private var siteImagesSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            PublicSiteImageRow(
+                title: "Favicon",
+                url: siteImageDraft.faviconURL ?? store.faviconURL,
+                isUnsaved: siteImageDraft.faviconURL != nil,
+                systemImage: "star.square",
+                replaceTitle: "Replace SVG",
+                onReplace: chooseFavicon
+            )
+
+            Divider()
+
+            PublicSiteImageRow(
+                title: "Default OG image",
+                url: siteImageDraft.defaultOGImageURL ?? store.defaultOGImageURL,
+                isUnsaved: siteImageDraft.defaultOGImageURL != nil,
+                systemImage: "rectangle.on.rectangle",
+                replaceTitle: "Replace JPEG",
+                onReplace: chooseDefaultOGImage
+            )
         }
     }
 
@@ -198,6 +236,7 @@ struct HomeSettingsPreferencesView: View {
     private func reload() {
         guard store.hasProject else { return }
         do {
+            siteImageDraft.clear()
             let loaded = try store.readHomeSettings()
             settings = loaded
             lastLoaded = loaded
@@ -215,15 +254,213 @@ struct HomeSettingsPreferencesView: View {
         message = ""
     }
 
-    private func save() {
-        guard store.hasProject else { return }
-        guard let settings else { return }
+    @discardableResult
+    private func save() -> Bool {
+        guard store.hasProject else { return false }
+        guard let settings else { return false }
         do {
-            try store.writeHomeSettings(settings)
-            lastLoaded = settings
+            if settings != lastLoaded {
+                try store.writeHomeSettings(settings)
+                lastLoaded = settings
+            }
+            if siteImageDraft.hasUnsaved {
+                try siteImageDraft.save(to: store)
+            }
             message = "Saved site settings"
+            return true
+        } catch {
+            message = error.localizedDescription
+            return false
+        }
+    }
+
+    private func discard() {
+        settings = lastLoaded
+        descriptionDraft = lastLoaded?.homeDescription.joined(separator: "\n") ?? ""
+        siteImageDraft.clear()
+    }
+
+    private func chooseFavicon() {
+        chooseSiteImage(
+            filename: "favicon.svg",
+            allowedContentTypes: UTType(filenameExtension: "svg").map { [$0] } ?? [],
+            panelMessage: "Choose an SVG file to replace public/favicon.svg.",
+            successMessage: "Favicon selected. Save to update public/favicon.svg."
+        ) { stagedURL in
+            siteImageDraft.replaceFavicon(with: stagedURL)
+        }
+    }
+
+    private func chooseDefaultOGImage() {
+        chooseSiteImage(
+            filename: "astropaper-og.jpg",
+            allowedContentTypes: [.jpeg],
+            panelMessage: "Choose a JPEG file to replace public/astropaper-og.jpg.",
+            successMessage: "Default OG image selected. Save to update public/astropaper-og.jpg."
+        ) { stagedURL in
+            siteImageDraft.replaceDefaultOGImage(with: stagedURL)
+        }
+    }
+
+    private func chooseSiteImage(
+        filename: String,
+        allowedContentTypes: [UTType],
+        panelMessage: String,
+        successMessage: String,
+        onStage: (URL) -> Void
+    ) {
+        guard store.hasProject else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        if !allowedContentTypes.isEmpty {
+            panel.allowedContentTypes = allowedContentTypes
+        }
+        panel.message = panelMessage
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let stagedURL = try store.stageTemporaryFile(from: url, filename: filename)
+            onStage(stagedURL)
+            message = successMessage
         } catch {
             message = error.localizedDescription
         }
+    }
+}
+
+@MainActor
+final class SiteImageDraft: ObservableObject {
+    @Published var faviconURL: URL?
+    @Published var defaultOGImageURL: URL?
+
+    var hasUnsaved: Bool {
+        faviconURL != nil || defaultOGImageURL != nil
+    }
+
+    func replaceFavicon(with url: URL) {
+        clearFavicon()
+        faviconURL = url
+    }
+
+    func replaceDefaultOGImage(with url: URL) {
+        clearDefaultOGImage()
+        defaultOGImageURL = url
+    }
+
+    func save(to store: BlogStore) throws {
+        if let faviconURL {
+            try store.replaceFavicon(from: faviconURL)
+        }
+        if let defaultOGImageURL {
+            try store.replaceDefaultOGImage(from: defaultOGImageURL)
+        }
+        clear()
+    }
+
+    func clear() {
+        clearFavicon()
+        clearDefaultOGImage()
+    }
+
+    private func clearFavicon() {
+        if let faviconURL {
+            try? FileManager.default.removeItem(at: faviconURL)
+        }
+        faviconURL = nil
+    }
+
+    private func clearDefaultOGImage() {
+        if let defaultOGImageURL {
+            try? FileManager.default.removeItem(at: defaultOGImageURL)
+        }
+        defaultOGImageURL = nil
+    }
+}
+
+private struct PublicSiteImageRow: View {
+    let title: String
+    let url: URL
+    let isUnsaved: Bool
+    let systemImage: String
+    let replaceTitle: String
+    let onReplace: () -> Void
+
+    private var image: NSImage? {
+        ImageCache.image(at: url)
+    }
+
+    private var exists: Bool {
+        FileManager.default.fileExists(atPath: url.path)
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            preview
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(.callout)
+                    if isUnsaved {
+                        Text("Unsaved")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                    if !exists {
+                        Text("Missing")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                }
+
+                Text(url.displayPath)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+            }
+
+            Spacer()
+
+            Button {
+                onReplace()
+            } label: {
+                Label(replaceTitle, systemImage: "photo.badge.arrow.down")
+            }
+
+            Button {
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            } label: {
+                Label("Reveal", systemImage: "folder")
+            }
+            .disabled(!exists)
+        }
+    }
+
+    private var preview: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color.secondary.opacity(0.08))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+                }
+
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 48, height: 48)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            } else {
+                Image(systemName: systemImage)
+                    .font(.system(size: 20))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 48, height: 48)
     }
 }

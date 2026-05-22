@@ -2,19 +2,27 @@ import SwiftUI
 
 struct AboutPagePreferencesView: View {
     @ObservedObject var store: BlogStore
+    @ObservedObject var closeState: SettingsCloseState
     @State private var draft = AboutPageDraft()
     @State private var savedDraft = AboutPageDraft()
+    @State private var unsavedProfileImageURL: URL?
     @State private var message = ""
 
     private var isDirty: Bool {
-        draft != savedDraft
+        draft != savedDraft || unsavedProfileImageURL != nil
     }
 
     private var profileImageSource: String? {
-        draft.profileImageSource
+        if let unsavedProfileImageURL {
+            return unsavedProfileImageURL.lastPathComponent
+        }
+        return draft.profileImageSource
     }
 
     private var profileImageURL: URL? {
+        if let unsavedProfileImageURL {
+            return unsavedProfileImageURL
+        }
         guard let source = profileImageSource else { return nil }
         if source.hasPrefix(ImageService.assetImagePrefix) {
             return store.resolvedAssetImageURL(source)
@@ -48,7 +56,7 @@ struct AboutPagePreferencesView: View {
                 .disabled(!store.hasProject)
 
                 Button {
-                    save()
+                    _ = save()
                 } label: {
                     Label("Save", systemImage: "square.and.arrow.down")
                 }
@@ -99,6 +107,12 @@ struct AboutPagePreferencesView: View {
             .font(.caption)
         }
         .onAppear {
+            closeState.register(
+                id: "about",
+                hasUnsaved: { isDirty },
+                save: { save() },
+                discard: discard
+            )
             if store.hasProject, draft.body.isEmpty, draft.frontmatter.isEmpty {
                 reload()
             }
@@ -119,6 +133,7 @@ struct AboutPagePreferencesView: View {
     private func reload() {
         guard store.hasProject else { return }
         do {
+            clearUnsavedProfileImage()
             let page = try store.readAboutPage()
             let loadedDraft = AboutPageDraft(page: page)
             draft = loadedDraft
@@ -130,30 +145,55 @@ struct AboutPagePreferencesView: View {
     }
 
     private func reset() {
+        clearUnsavedProfileImage()
         draft = AboutPageDraft()
         savedDraft = AboutPageDraft()
         message = ""
     }
 
-    private func save() {
-        guard store.hasProject else { return }
+    @discardableResult
+    private func save() -> Bool {
+        guard store.hasProject else { return false }
         do {
-            try store.writeAboutPage(draft.page)
-            savedDraft = draft
+            var pageDraft = draft
+            if let unsavedProfileImageURL {
+                let publicPath = try store.copyAboutProfileImage(from: unsavedProfileImageURL)
+                pageDraft.replaceProfileImage(with: publicPath, defaultAlt: "Profile photo")
+            }
+            try store.writeAboutPage(pageDraft.page)
+            draft = pageDraft
+            savedDraft = pageDraft
+            clearUnsavedProfileImage()
             message = "Saved About page"
+            return true
         } catch {
             message = error.localizedDescription
+            return false
         }
     }
 
     private func replaceProfileImage(with sourceURL: URL) {
         guard store.hasProject else { return }
         do {
-            let publicPath = try store.copyAboutProfileImage(from: sourceURL)
-            draft.replaceProfileImage(with: publicPath, defaultAlt: "Profile photo")
-            message = "Profile photo updated. Save About page to keep it."
+            let fileExtension = sourceURL.pathExtension.lowercased().isEmpty ? "png" : sourceURL.pathExtension.lowercased()
+            let stagedURL = try store.stageTemporaryFile(from: sourceURL, filename: "about-profile.\(fileExtension)")
+            clearUnsavedProfileImage()
+            unsavedProfileImageURL = stagedURL
+            message = "Profile photo selected. Save About page to apply it."
         } catch {
             message = error.localizedDescription
         }
+    }
+
+    private func discard() {
+        draft = savedDraft
+        clearUnsavedProfileImage()
+    }
+
+    private func clearUnsavedProfileImage() {
+        if let unsavedProfileImageURL {
+            try? FileManager.default.removeItem(at: unsavedProfileImageURL)
+        }
+        unsavedProfileImageURL = nil
     }
 }

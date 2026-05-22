@@ -21,15 +21,30 @@ struct SiteSettingsService {
     }
 
     func writeHomeSettings(_ settings: HomeSettings, projectRoot: URL) throws {
-        try writeSettings(settings, projectRoot: projectRoot)
+        try ensureUserSettingsFileExists(projectRoot: projectRoot)
+        var file = try readSettingsFile(projectRoot: projectRoot)
+        file.userSite = UserSiteSettings(settings: settings)
+        try writeSettingsFile(file, projectRoot: projectRoot)
     }
 
     func writeSocialSettings(_ settings: HomeSettings, projectRoot: URL) throws {
-        try writeSettings(settings, projectRoot: projectRoot)
+        try ensureUserSettingsFileExists(projectRoot: projectRoot)
+        var file = try readSettingsFile(projectRoot: projectRoot)
+        file.userSocials = settings.socials.map(UserSocialSettings.init)
+        try writeSettingsFile(file, projectRoot: projectRoot)
     }
 
     private func writeSettings(_ settings: HomeSettings, projectRoot: URL) throws {
         let file = UserSettingsFile(settings: settings)
+        try writeSettingsFile(file, projectRoot: projectRoot)
+    }
+
+    private func readSettingsFile(projectRoot: URL) throws -> UserSettingsFile {
+        let data = try Data(contentsOf: userSettingsURL(for: projectRoot))
+        return try JSONDecoder().decode(UserSettingsFile.self, from: data)
+    }
+
+    private func writeSettingsFile(_ file: UserSettingsFile, projectRoot: URL) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(file)
