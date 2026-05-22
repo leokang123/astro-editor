@@ -6,6 +6,12 @@ struct AstroPaperTemplateService {
         return entries.allSatisfy { $0 == ".DS_Store" }
     }
 
+    func isGitOnlyProjectDestination(_ url: URL) throws -> Bool {
+        let entries = try FileManager.default.contentsOfDirectory(atPath: url.path)
+        let meaningfulEntries = entries.filter { $0 != ".DS_Store" }
+        return meaningfulEntries == [".git"]
+    }
+
     func createProject(at projectRoot: URL) throws {
         guard try isEmptyProjectDestination(projectRoot) else {
             throw AstroPaperTemplateError.destinationNotEmpty

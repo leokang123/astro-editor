@@ -70,6 +70,25 @@ final class GitService {
         return output.isEmpty ? "Repository cloned." : output
     }
 
+    func pullConfiguredRemote(at projectRoot: URL) throws -> String {
+        guard isRepository(at: projectRoot) else {
+            throw GitServiceError.notRepository
+        }
+
+        let remote = (try? runGit(["remote", "get-url", "origin"], at: projectRoot).trimmedOutput) ?? ""
+        guard !remote.isEmpty else {
+            throw GitServiceError.missingRemote
+        }
+
+        let branch = currentBranch(at: projectRoot)
+        guard !branch.isEmpty else {
+            throw GitServiceError.missingBranch
+        }
+
+        let output = try runGit(["pull", "--ff-only", "origin", branch], at: projectRoot).output
+        return output.isEmpty ? "Pulled from \(branch)." : output
+    }
+
     func commitAndPush(at projectRoot: URL, message: String) async throws -> String {
         let cleanMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanMessage.isEmpty else {

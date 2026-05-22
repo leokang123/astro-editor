@@ -145,8 +145,15 @@ final class BlogStore: ObservableObject {
     }
 
     private func offerProjectCreationIfPossible(at url: URL) {
+        let isEmptyDestination: Bool
+
         do {
-            guard try templateService.isEmptyProjectDestination(url) else {
+            isEmptyDestination = try templateService.isEmptyProjectDestination(url)
+            if !isEmptyDestination, try templateService.isGitOnlyProjectDestination(url) {
+                offerGitPullIfPossible(at: url)
+                return
+            }
+            guard isEmptyDestination else {
                 message = AppMessage(text: "The selected folder is not an AstroPaper project, and it is not empty. Choose an existing project, or select an empty folder to create a new one.")
                 return
             }
@@ -185,6 +192,20 @@ final class BlogStore: ObservableObject {
         } catch {
             message = AppMessage(text: error.localizedDescription)
         }
+    }
+
+    private func offerGitPullIfPossible(at url: URL) {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "Pull Git repository?"
+        alert.informativeText = "The selected folder only contains .git. Pull from the configured origin and branch, then open it as an AstroPaper project."
+        alert.addButton(withTitle: "Pull Repository")
+        alert.addButton(withTitle: "Cancel")
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        guard confirmDiscardOrSaveChanges() else { return }
+
+        pullConfiguredRepository(into: url)
     }
 
     private func promptCloneRepository(into url: URL) {
@@ -238,6 +259,38 @@ final class BlogStore: ObservableObject {
                 gitController.refreshStatus(at: url)
             } catch {
                 statusText = "Clone failed"
+                message = AppMessage(text: error.localizedDescription)
+            }
+        }
+    }
+
+    private func pullConfiguredRepository(into url: URL) {
+        let service = gitService
+        statusText = "Pulling Git repository..."
+
+        Task {
+            do {
+                _ = try await Task.detached(priority: .userInitiated) {
+                    try service.pullConfiguredRemote(at: url)
+                }.value
+
+                guard fileService.validateProjectRoot(url) else {
+                    statusText = "Pull finished, but project is invalid"
+                    message = AppMessage(text: "The repository was pulled, but it does not look like an AstroPaper project with src/data/blog.")
+                    return
+                }
+
+                resetProjectRuntimeState()
+                projectRoot = url
+                hasProject = true
+                saveProjectRoot(url)
+                closeCurrentDocument()
+                selectionID = nil
+                statusText = "Pulled Git repository"
+                rescan()
+                gitController.refreshStatus(at: url)
+            } catch {
+                statusText = "Pull failed"
                 message = AppMessage(text: error.localizedDescription)
             }
         }

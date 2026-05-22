@@ -4,6 +4,6 @@
   "version": "5.5.1-custom",
   "tag": "custom-2026-05-20",
   "tagCommit": null,
-  "archiveSha256": "7a60b732dab7e57b119c591a1c198288205c197817412d0c8e5f19ca74132ad2",
+  "archiveSha256": "dcb6ac2daf0fc6507148b5e39455b8057308f7ca7ff7d4cc97a69eb426520912",
   "notes": "Custom AstroPaper starter generated from the local custom blog skeleton. It keeps the src/data/blog content layout, nested folder-based categories, category order sorting, user-settings.json site settings, Markdown extensions, Pagefind build script, and Docker preview setup. Personal posts, personal images, generated output, dependencies, git data, Pagefind output, and local migration scripts are excluded."
 }
