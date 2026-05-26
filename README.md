@@ -14,8 +14,8 @@ Download the latest build from GitHub Releases:
 
 The release includes:
 
-- `AstroPaperEditor-v0.4.1.dmg`
-- `AstroPaperEditor-v0.4.1.zip`
+- `AstroPaperEditor-v0.4.3.dmg`
+- `AstroPaperEditor-v0.4.3.zip`
 
 Open the DMG and move `AstroPaperEditor.app` to your Applications folder.
 
@@ -96,6 +96,10 @@ Preview mode renders the current Markdown post inside the app.
 ![Rendered post preview](docs/images/preview-mode.png)
 
 The preview supports common Markdown output, local images, tables, Mermaid diagrams, and math rendering when the project includes the required AstroPaper assets.
+
+### Known Preview Limitations
+
+The in-app preview currently renders Markdown with a line-based parser. AST-based renderers such as `swift-markdown` parse the document structure first, so they can handle nested Markdown more reliably. Because of this difference, some Markdown syntax inside lists, code blocks, or complex nested documents may not render the same way in the app preview.
 
 ## AstroPaper Base And Site Customizations
 

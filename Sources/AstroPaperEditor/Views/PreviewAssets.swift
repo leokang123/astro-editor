@@ -41,6 +41,21 @@ struct PreviewAssets {
         """
     }
 
+    var highlightStylesheetTag: String {
+        [
+            stylesheetTag(
+                for: "node_modules/@highlightjs/cdn-assets/styles/github.min.css",
+                fallbackHref: "https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/styles/github.min.css",
+                media: "(prefers-color-scheme: light)"
+            ),
+            stylesheetTag(
+                for: "node_modules/@highlightjs/cdn-assets/styles/github-dark.min.css",
+                fallbackHref: "https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/styles/github-dark.min.css",
+                media: "(prefers-color-scheme: dark)"
+            )
+        ].joined(separator: "\n")
+    }
+
     var katexScriptTag: String {
         tag(for: "node_modules/katex/dist/katex.min.js", kind: .script)
     }
@@ -51,6 +66,10 @@ struct PreviewAssets {
 
     var mermaidScriptTag: String {
         tag(for: "node_modules/mermaid/dist/mermaid.min.js", kind: .script)
+    }
+
+    var highlightScriptTag: String {
+        tag(for: "node_modules/@highlightjs/cdn-assets/highlight.min.js", kind: .script)
     }
 
     private func tag(for relativePath: String, kind: AssetKind) -> String {
@@ -72,6 +91,17 @@ struct PreviewAssets {
             }
             return "<script>\n\(script.replacingOccurrences(of: "</script>", with: "<\\/script>"))\n</script>"
         }
+    }
+
+    private func stylesheetTag(for relativePath: String, fallbackHref: String, media: String) -> String {
+        let url = projectRoot.appendingPathComponent(relativePath)
+        guard FileManager.default.fileExists(atPath: url.path),
+              let stylesheet = Self.cachedText(for: url) else {
+            return "<link rel=\"stylesheet\" href=\"\(fallbackHref)\" media=\"\(media)\">"
+        }
+
+        let rewrittenStylesheet = rewriteStylesheetResourceURLs(stylesheet, relativeTo: url.deletingLastPathComponent())
+        return "<style media=\"\(media)\">\n\(rewrittenStylesheet.replacingOccurrences(of: "</style>", with: "<\\/style>"))\n</style>"
     }
 
     private func rewriteStylesheetResourceURLs(_ stylesheet: String, relativeTo directory: URL) -> String {
@@ -147,6 +177,8 @@ struct PreviewAssets {
             return "<script src=\"https://cdn.jsdelivr.net/npm/katex@0.16.46/dist/contrib/auto-render.min.js\"></script>"
         case ("node_modules/mermaid/dist/mermaid.min.js", .script):
             return "<script src=\"https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist/mermaid.min.js\"></script>"
+        case ("node_modules/@highlightjs/cdn-assets/highlight.min.js", .script):
+            return "<script src=\"https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/highlight.min.js\"></script>"
         default:
             return ""
         }

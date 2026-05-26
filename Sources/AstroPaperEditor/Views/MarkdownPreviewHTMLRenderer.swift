@@ -15,6 +15,7 @@ struct MarkdownPreviewHTMLRenderer {
           <base href="\(escapeHTML(projectBaseURLString))">
           \(assets.katexStylesheetTag)
           \(assets.katexFallbackStylesheetTag)
+          \(assets.highlightStylesheetTag)
           <style>
             :root {
               color-scheme: light dark;
@@ -23,6 +24,7 @@ struct MarkdownPreviewHTMLRenderer {
               --muted: color-mix(in srgb, CanvasText 58%, transparent);
               --rule: color-mix(in srgb, CanvasText 16%, transparent);
               --code-bg: color-mix(in srgb, CanvasText 8%, transparent);
+              --code-block-bg: light-dark(#f6f8fa, #0d1117);
             }
             html, body {
               margin: 0;
@@ -67,6 +69,22 @@ struct MarkdownPreviewHTMLRenderer {
             h2 { font-size: 1.55rem; }
             h3 { font-size: 1.25rem; }
             p { margin: 0 0 1em; }
+            ol, ul {
+              margin: 0 0 1em 1.35em;
+              padding-left: 1.2em;
+            }
+            li {
+              margin: 0.2em 0;
+              padding-left: 0.15em;
+            }
+            li > p {
+              margin: 0.1em 0;
+            }
+            li > ol,
+            li > ul {
+              margin-top: 0.25em;
+              margin-bottom: 0.25em;
+            }
             a { color: LinkText; }
             .source-line-anchor {
               scroll-margin-top: 0;
@@ -78,19 +96,19 @@ struct MarkdownPreviewHTMLRenderer {
               padding-left: 1em;
             }
             pre {
-              background: var(--code-bg);
+              background: var(--code-block-bg);
               border-radius: 8px;
               box-sizing: border-box;
               overflow-x: auto;
               padding: 14px;
             }
+            pre code.hljs {
+              background: transparent;
+              padding: 0;
+            }
             code {
               font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
               font-size: 0.92em;
-            }
-            .source-code-line {
-              display: block;
-              min-height: 1em;
             }
             :not(pre) > code {
               background: var(--code-bg);
@@ -132,6 +150,7 @@ struct MarkdownPreviewHTMLRenderer {
           \(assets.katexScriptTag)
           \(assets.katexAutoRenderScriptTag)
           \(assets.mermaidScriptTag)
+          \(assets.highlightScriptTag)
           <script>
             async function renderPreviewEnhancements() {
               if (window.renderMathInElement) {
@@ -153,6 +172,11 @@ struct MarkdownPreviewHTMLRenderer {
                   theme: dark ? "dark" : "default"
                 });
                 await mermaid.run({ querySelector: ".mermaid" });
+              }
+              if (window.hljs) {
+                document.querySelectorAll("pre code").forEach(block => {
+                  hljs.highlightElement(block);
+                });
               }
             }
             function revealPreviewFallback() {
@@ -189,14 +213,12 @@ struct MarkdownPreviewHTMLRenderer {
     private func renderMarkdown(_ markdown: String) -> String {
         var html: [String] = []
         var paragraph: [String] = []
-        var listItems: [(line: Int, text: String)] = []
         var codeLines: [(line: Int, text: String)] = []
         var codeLanguage = ""
         var inCode = false
         var inBlockMath = false
         var blockMathLines: [String] = []
         var paragraphStartLine = 1
-        var listStartLine = 1
         var codeStartLine = 1
         var blockMathStartLine = 1
 
@@ -210,25 +232,13 @@ struct MarkdownPreviewHTMLRenderer {
             paragraph.removeAll()
         }
 
-        func flushList() {
-            guard !listItems.isEmpty else { return }
-            let items = listItems
-                .map { "<li\(marker($0.line))>\(inlineHTML($0.text))</li>" }
-                .joined()
-            html.append("<ul\(marker(listStartLine))>\(items)</ul>")
-            listItems.removeAll()
-        }
-
         func flushCode() {
             let code = codeLines.map { $0.text }.joined(separator: "\n")
             if codeLanguage.lowercased() == "mermaid" {
                 html.append("<div class=\"mermaid\"\(marker(codeStartLine))>\(escapeHTML(code))</div>")
             } else {
                 let languageClass = codeLanguage.isEmpty ? "" : " class=\"language-\(escapeHTML(codeLanguage))\""
-                let codeHTML = codeLines
-                    .map { "<span class=\"source-code-line\"\(marker($0.line))>\(escapeHTML($0.text))</span>" }
-                    .joined()
-                html.append("<pre\(marker(codeStartLine))><code\(languageClass)>\(codeHTML)</code></pre>")
+                html.append("<pre\(marker(codeStartLine))><code\(languageClass)>\(escapeHTML(code))</code></pre>")
             }
             codeLines.removeAll()
             codeLanguage = ""
@@ -247,7 +257,6 @@ struct MarkdownPreviewHTMLRenderer {
                     inCode = false
                 } else {
                     flushParagraph()
-                    flushList()
                     inCode = true
                     codeStartLine = sourceLine
                     codeLanguage = String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces)
@@ -269,7 +278,6 @@ struct MarkdownPreviewHTMLRenderer {
                     inBlockMath = false
                 } else {
                     flushParagraph()
-                    flushList()
                     inBlockMath = true
                     blockMathStartLine = sourceLine
                 }
@@ -285,14 +293,12 @@ struct MarkdownPreviewHTMLRenderer {
 
             if trimmed.isEmpty {
                 flushParagraph()
-                flushList()
                 index += 1
                 continue
             }
 
             if trimmed == "---" || trimmed == "***" {
                 flushParagraph()
-                flushList()
                 html.append("<hr\(marker(sourceLine))>")
                 index += 1
                 continue
@@ -300,7 +306,6 @@ struct MarkdownPreviewHTMLRenderer {
 
             if let image = image(from: trimmed) {
                 flushParagraph()
-                flushList()
                 html.append("<figure\(marker(sourceLine))><img src=\"\(escapeHTML(imageSource(image.source)))\" alt=\"\(escapeHTML(image.alt))\"></figure>")
                 index += 1
                 continue
@@ -308,7 +313,6 @@ struct MarkdownPreviewHTMLRenderer {
 
             if let rawImageHTML = rawImageHTML(from: trimmed) {
                 flushParagraph()
-                flushList()
                 html.append("<div\(marker(sourceLine))>\(rawImageHTML)</div>")
                 index += 1
                 continue
@@ -316,7 +320,6 @@ struct MarkdownPreviewHTMLRenderer {
 
             if let rawHTML = rawHTMLLine(from: trimmed) {
                 flushParagraph()
-                flushList()
                 html.append(wrapSourceLine(rawHTML, line: sourceLine))
                 index += 1
                 continue
@@ -324,7 +327,6 @@ struct MarkdownPreviewHTMLRenderer {
 
             if let table = tableHTML(from: lines, startIndex: index) {
                 flushParagraph()
-                flushList()
                 html.append(wrapSourceLine(table.html, line: sourceLine))
                 index = table.nextIndex
                 continue
@@ -332,7 +334,6 @@ struct MarkdownPreviewHTMLRenderer {
 
             if let heading = heading(from: trimmed) {
                 flushParagraph()
-                flushList()
                 html.append("<h\(heading.level)\(marker(sourceLine))>\(inlineHTML(heading.text))</h\(heading.level)>")
                 index += 1
                 continue
@@ -340,20 +341,16 @@ struct MarkdownPreviewHTMLRenderer {
 
             if trimmed.hasPrefix(">") {
                 flushParagraph()
-                flushList()
                 let quote = String(trimmed.dropFirst()).trimmingCharacters(in: .whitespaces)
                 html.append("<blockquote\(marker(sourceLine))>\(inlineHTML(quote))</blockquote>")
                 index += 1
                 continue
             }
 
-            if let item = unorderedListItem(from: trimmed) {
+            if let list = listHTML(from: lines, startIndex: index) {
                 flushParagraph()
-                if listItems.isEmpty {
-                    listStartLine = sourceLine
-                }
-                listItems.append((sourceLine, item))
-                index += 1
+                html.append(list.html)
+                index = list.nextIndex
                 continue
             }
 
@@ -369,7 +366,6 @@ struct MarkdownPreviewHTMLRenderer {
             html.append("<p\(marker(blockMathStartLine))>$$\(escapeHTML(blockMathLines.joined(separator: "\n")))$$</p>")
         }
         flushParagraph()
-        flushList()
         return html.joined(separator: "\n")
     }
 
@@ -412,11 +408,137 @@ struct MarkdownPreviewHTMLRenderer {
         return (hashes.count, text)
     }
 
-    private func unorderedListItem(from line: String) -> String? {
-        if line.hasPrefix("- ") || line.hasPrefix("* ") {
-            return String(line.dropFirst(2))
+    private func listHTML(from lines: [String], startIndex: Int) -> (html: String, nextIndex: Int)? {
+        guard let marker = listMarker(from: lines[startIndex]) else { return nil }
+        return renderList(lines: lines, startIndex: startIndex, indent: marker.indent, kind: marker.kind)
+    }
+
+    private func renderList(
+        lines: [String],
+        startIndex: Int,
+        indent: Int,
+        kind: MarkdownListKind
+    ) -> (html: String, nextIndex: Int) {
+        var items: [String] = []
+        var index = startIndex
+
+        while index < lines.count {
+            guard let marker = listMarker(from: lines[index]),
+                  marker.indent == indent,
+                  marker.kind.matches(kind) else {
+                break
+            }
+
+            let itemLine = index + 1
+            var itemHTML = inlineHTML(marker.text)
+            index += 1
+
+            while index < lines.count {
+                let line = lines[index]
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                if trimmed.isEmpty { break }
+
+                if let nestedMarker = listMarker(from: line) {
+                    if nestedMarker.indent > indent {
+                        let nested = renderList(
+                            lines: lines,
+                            startIndex: index,
+                            indent: nestedMarker.indent,
+                            kind: nestedMarker.kind
+                        )
+                        itemHTML += nested.html
+                        index = nested.nextIndex
+                        continue
+                    }
+                    break
+                }
+
+                guard leadingIndent(in: line) > indent else { break }
+                itemHTML += "<br>\(inlineHTML(trimmed))"
+                index += 1
+            }
+
+            items.append("<li\(sourceLineMarker(itemLine))>\(itemHTML)</li>")
         }
-        return nil
+
+        let start = kind.startAttribute
+        return ("<\(kind.tag)\(start)\(sourceLineMarker(startIndex + 1))>\(items.joined())</\(kind.tag)>", index)
+    }
+
+    private func listMarker(from line: String) -> MarkdownListMarker? {
+        let range = NSRange(line.startIndex..<line.endIndex, in: line)
+        guard let match = Self.listItemRegex.firstMatch(in: line, range: range),
+              let indentRange = Range(match.range(at: 1), in: line),
+              let markerRange = Range(match.range(at: 2), in: line),
+              let textRange = Range(match.range(at: 3), in: line) else {
+            return nil
+        }
+
+        let marker = String(line[markerRange])
+        let kind: MarkdownListKind
+        if let first = marker.first, first.isNumber {
+            let number = marker.dropLast()
+            kind = .ordered(start: Int(String(number)) ?? 1)
+        } else {
+            kind = .unordered
+        }
+
+        return MarkdownListMarker(
+            indent: indentWidth(String(line[indentRange])),
+            kind: kind,
+            text: String(line[textRange])
+        )
+    }
+
+    private func leadingIndent(in line: String) -> Int {
+        let prefix = line.prefix { $0 == " " || $0 == "\t" }
+        return indentWidth(String(prefix))
+    }
+
+    private func indentWidth(_ value: String) -> Int {
+        value.reduce(0) { width, character in
+            width + (character == "\t" ? 4 : 1)
+        }
+    }
+
+    private enum MarkdownListKind {
+        case unordered
+        case ordered(start: Int)
+
+        var tag: String {
+            switch self {
+            case .unordered:
+                return "ul"
+            case .ordered:
+                return "ol"
+            }
+        }
+
+        var startAttribute: String {
+            switch self {
+            case .unordered:
+                return ""
+            case .ordered(let start) where start != 1:
+                return " start=\"\(start)\""
+            case .ordered:
+                return ""
+            }
+        }
+
+        func matches(_ other: MarkdownListKind) -> Bool {
+            switch (self, other) {
+            case (.unordered, .unordered), (.ordered, .ordered):
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
+    private struct MarkdownListMarker {
+        let indent: Int
+        let kind: MarkdownListKind
+        let text: String
     }
 
     private func image(from line: String) -> (alt: String, source: String)? {
@@ -581,6 +703,7 @@ struct MarkdownPreviewHTMLRenderer {
     private static let strongRegex = try! NSRegularExpression(pattern: #"\*\*([^*]+)\*\*"#)
     private static let emphasisRegex = try! NSRegularExpression(pattern: #"(?<!\*)\*([^*]+)\*(?!\*)"#)
     private static let linkRegex = try! NSRegularExpression(pattern: #"\[([^\]]+)\]\(([^)]+)\)"#)
+    private static let listItemRegex = try! NSRegularExpression(pattern: #"^([ \t]*)([-*+]|\d+[.)])[ \t]+(.+)$"#)
     private static let rawHTMLTagRegex = try! NSRegularExpression(pattern: #"^</?([A-Za-z][A-Za-z0-9-]*)\b"#)
     private static let blockedRawHTMLRegex = try! NSRegularExpression(
         pattern: #"<\s*(script|iframe|object|embed|form|input|button|style)\b|javascript:"#,
