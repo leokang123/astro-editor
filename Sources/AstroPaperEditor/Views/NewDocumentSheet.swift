@@ -9,6 +9,8 @@ struct NewDocumentSheet: View {
     @State private var description = ""
     @State private var tags = "general"
     @State private var order = ""
+    @State private var autoOrder = true
+    @State private var automaticOrder = "1"
     @State private var featured = false
     @State private var ogImageURL: URL?
 
@@ -36,8 +38,10 @@ struct NewDocumentSheet: View {
                 Text("Order")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                TextField("Optional, e.g. 1", text: $order)
+                TextField("Optional, e.g. 1", text: autoOrder ? .constant(automaticOrder) : $order)
                     .textFieldStyle(.roundedBorder)
+                    .disabled(autoOrder)
+                Toggle("Auto order", isOn: $autoOrder)
             }
 
             Toggle("Featured", isOn: $featured)
@@ -77,7 +81,8 @@ struct NewDocumentSheet: View {
                         title: title,
                         description: description,
                         tagsText: tags,
-                        order: order,
+                        order: autoOrder ? nil : order,
+                        autoOrder: autoOrder,
                         featured: featured,
                         ogImageSourceURL: ogImageURL,
                         parentID: store.creationParentID
@@ -90,6 +95,12 @@ struct NewDocumentSheet: View {
         }
         .padding()
         .frame(width: 460)
+        .onAppear {
+            refreshAutomaticOrder()
+        }
+        .onChange(of: store.creationParentID) { _ in
+            refreshAutomaticOrder()
+        }
     }
 
     private func chooseOGImage() {
@@ -107,5 +118,9 @@ struct NewDocumentSheet: View {
 
     private var locationText: String {
         store.creationLocationText(parentID: store.creationParentID)
+    }
+
+    private func refreshAutomaticOrder() {
+        automaticOrder = store.suggestedNextDocumentOrder(parentID: store.creationParentID)
     }
 }

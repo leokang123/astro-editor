@@ -359,22 +359,25 @@ private struct OGImageInspector: View {
 
             Group {
                 if let image = nsImage {
-                    Image(nsImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 110)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .overlay(alignment: .bottomLeading) {
-                            Text(imageLabel)
-                                .font(.caption2)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .padding(6)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(.thinMaterial)
-                        }
-                        .allowsHitTesting(false)
+                    GeometryReader { proxy in
+                        Image(nsImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: proxy.size.width, height: 110)
+                            .clipped()
+                            .overlay(alignment: .bottomLeading) {
+                                Text(imageLabel)
+                                    .font(.caption2)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                    .padding(6)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(.thinMaterial)
+                            }
+                    }
+                    .frame(height: 110)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .allowsHitTesting(false)
                 } else {
                     VStack(spacing: 6) {
                         Image(systemName: hasImage ? "exclamationmark.triangle" : "photo")
@@ -402,6 +405,7 @@ private struct OGImageInspector: View {
                     .allowsHitTesting(false)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var hasImage: Bool {

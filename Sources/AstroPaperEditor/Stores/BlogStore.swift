@@ -482,6 +482,7 @@ final class BlogStore: ObservableObject {
         description: String,
         tagsText: String,
         order: String?,
+        autoOrder: Bool,
         featured: Bool,
         ogImageSourceURL: URL?,
         parentID: String?
@@ -490,6 +491,7 @@ final class BlogStore: ObservableObject {
         guard confirmDiscardOrSaveChanges() else { return }
         do {
             let parent = categoryURL(for: parentID)
+            let resolvedOrder = autoOrder ? nextDocumentOrder(parentID: parentID) : order
             let ogImage = try ogImageSourceURL.map {
                 try imageService.copyToAssets(from: $0, inProjectRoot: projectRoot, suggestedName: "\(title)-og")
             }
@@ -497,7 +499,7 @@ final class BlogStore: ObservableObject {
                 title: title,
                 description: description,
                 tags: tagsText.trimmingForTags,
-                order: order,
+                order: resolvedOrder,
                 featured: featured ? true : nil,
                 ogImage: ogImage,
                 under: parent
@@ -515,6 +517,10 @@ final class BlogStore: ObservableObject {
         let parent = categoryURL(for: parentID)
         let relative = BlogFileService.relativePath(from: blogRoot, to: parent)
         return relative.isEmpty ? "All Posts" : relative
+    }
+
+    func suggestedNextDocumentOrder(parentID: String?) -> String {
+        nextDocumentOrder(parentID: parentID)
     }
 
     func promptRenameSelected() {
@@ -1103,6 +1109,22 @@ final class BlogStore: ObservableObject {
             }
         }
         return blogRoot
+    }
+
+    private func nextDocumentOrder(parentID: String?) -> String {
+        let parent = categoryURL(for: parentID).standardizedFileURL
+        let orders = directDocumentNodes(in: parent).compactMap { node -> Int? in
+            guard let order = try? fileService.readFrontmatter(at: node.url).order else { return nil }
+            return Int(order.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        return String((orders.max() ?? 0) + 1)
+    }
+
+    private func directDocumentNodes(in parent: URL) -> [BlogNode] {
+        let parentPath = parent.path
+        return documentNodes(from: tree).filter { node in
+            node.url.deletingLastPathComponent().standardizedFileURL.path == parentPath
+        }
     }
 
     private func node(withID id: String) -> BlogNode? {
