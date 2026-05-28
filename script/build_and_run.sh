@@ -4,8 +4,8 @@ set -euo pipefail
 MODE="${1:-run}"
 APP_NAME="AstroPaperEditor"
 BUNDLE_ID="dev.jeonghoon.AstroPaperEditor"
-APP_VERSION="0.4.1"
-BUILD_NUMBER="41"
+APP_VERSION="0.5.0"
+BUILD_NUMBER="50"
 MIN_SYSTEM_VERSION="13.0"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -17,15 +17,24 @@ APP_RESOURCES="$APP_CONTENTS/Resources"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 ICON_FILE="$ROOT_DIR/Resources/AppIcon.icns"
+SWIFT_BUILD_OPTIONS=()
+
+if [[ -n "${SWIFT_BUILD_FLAGS:-}" ]]; then
+  read -r -a SWIFT_BUILD_OPTIONS <<< "$SWIFT_BUILD_FLAGS"
+fi
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 
-if [[ -f "$ROOT_DIR/package.json" && -d "$ROOT_DIR/node_modules" ]]; then
+if [[ -f "$ROOT_DIR/package.json" ]]; then
+  if [[ ! -d "$ROOT_DIR/node_modules" ]]; then
+    echo "node_modules is missing. Run npm ci before building." >&2
+    exit 1
+  fi
   npm run build:codemirror
 fi
 
-swift build
-BUILD_BINARY="$(swift build --show-bin-path)/$APP_NAME"
+swift build "${SWIFT_BUILD_OPTIONS[@]}"
+BUILD_BINARY="$(swift build "${SWIFT_BUILD_OPTIONS[@]}" --show-bin-path)/$APP_NAME"
 
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES"
