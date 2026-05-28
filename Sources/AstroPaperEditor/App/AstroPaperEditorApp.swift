@@ -86,44 +86,14 @@ enum EditorCommandDispatcher {
 
         switch (key, flags.contains(.shift)) {
         case ("f", false):
-            return store?.showEditorFindInterface() ?? performTextFinderAction(.showFindInterface)
+            return store?.showEditorFindInterface() ?? false
         case ("g", false):
-            return store?.findNextInEditor() ?? performTextFinderAction(.nextMatch)
+            return store?.findNextInEditor() ?? false
         case ("g", true):
-            return store?.findPreviousInEditor() ?? performTextFinderAction(.previousMatch)
+            return store?.findPreviousInEditor() ?? false
         default:
             return false
         }
-    }
-
-    static func performTextFinderAction(_ action: NSTextFinder.Action, focusTextView: Bool = true) -> Bool {
-        guard let textView = NSApp.keyWindow?.contentView?.firstDescendant(ofType: PasteAwareTextView.self) else {
-            return false
-        }
-
-        let sender = NSMenuItem()
-        sender.tag = action.rawValue
-        if focusTextView {
-            textView.window?.makeFirstResponder(textView)
-        }
-        textView.performTextFinderAction(sender)
-        return true
-    }
-}
-
-private extension NSView {
-    func firstDescendant<ViewType: NSView>(ofType type: ViewType.Type) -> ViewType? {
-        if let matchingView = self as? ViewType {
-            return matchingView
-        }
-
-        for subview in subviews {
-            if let matchingView = subview.firstDescendant(ofType: type) {
-                return matchingView
-            }
-        }
-
-        return nil
     }
 }
 
