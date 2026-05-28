@@ -283,10 +283,20 @@ struct MarkdownPreviewView: NSViewRepresentable {
             (() => {
               const targetPosition = \(position);
               const scrollSync = window.astroPaperScrollSync;
+              var didRevealReady = false;
               const reveal = () => document.body.classList.add("preview-ready");
+              const postReadyAfterPaint = () => {
+                if (didRevealReady) return;
+                didRevealReady = true;
+                requestAnimationFrame(() => {
+                  requestAnimationFrame(() => {
+                    window.webkit.messageHandlers.previewReady.postMessage(true);
+                  });
+                });
+              };
               const revealReady = () => {
                 reveal();
-                window.webkit.messageHandlers.previewReady.postMessage(true);
+                postReadyAfterPaint();
               };
               const restoreToken = scrollSync?.beginRestore();
               const shouldRestore = () => scrollSync?.isRestoreTokenActive(restoreToken) !== false;

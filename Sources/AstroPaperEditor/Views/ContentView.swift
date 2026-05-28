@@ -8,6 +8,8 @@ struct ContentView: View {
     @SceneStorage("showInspector") private var showInspector = true
     @AppStorage(EditorContentWidth.storageKey) private var editorContentWidthValue = EditorContentWidth.wide.rawValue
     @State private var isLiveResizing = false
+    @State private var splitPanelWidths = SplitPanelWidths()
+    @State private var restoreSplitPanelWidths = false
 
     init(store: BlogStore) {
         self.store = store
@@ -18,12 +20,26 @@ struct ContentView: View {
         ZStack {
             WindowLiveResizeDetector(
                 isLiveResizing: $isLiveResizing,
-                onWillStart: store.prepareForLiveResize
+                showSidebar: showSidebar,
+                showInspector: showInspector,
+                onWillStart: { widths in
+                    if let widths {
+                        splitPanelWidths = widths
+                    }
+                    store.prepareForLiveResize()
+                },
+                onDidEnd: {
+                    restoreSplitPanelWidths = true
+                }
             )
             .frame(width: 0, height: 0)
 
             if isLiveResizing {
-                ResizePlaceholderView(showSidebar: showSidebar, showInspector: showInspector)
+                ResizePlaceholderView(
+                    showSidebar: showSidebar,
+                    showInspector: showInspector,
+                    panelWidths: splitPanelWidths
+                )
             } else {
                 mainContent
             }
@@ -134,7 +150,11 @@ struct ContentView: View {
                         onDeleteSelected: store.deleteSelected,
                         onDeleteNode: store.deleteNode
                     )
-                    .frame(minWidth: 240, idealWidth: 280, maxWidth: 360)
+                    .frame(
+                        minWidth: sidebarFrame.min,
+                        idealWidth: sidebarFrame.ideal,
+                        maxWidth: sidebarFrame.max
+                    )
                 }
 
                 EditorView(
@@ -185,7 +205,17 @@ struct ContentView: View {
                         onClearOGImage: store.clearOGImage,
                         onResolveAssetImageURL: store.resolvedAssetImageURL
                     )
-                    .frame(minWidth: 280, idealWidth: 320, maxWidth: 420)
+                    .frame(
+                        minWidth: inspectorFrame.min,
+                        idealWidth: inspectorFrame.ideal,
+                        maxWidth: inspectorFrame.max
+                    )
+                }
+            }
+            .onAppear {
+                guard restoreSplitPanelWidths else { return }
+                DispatchQueue.main.async {
+                    restoreSplitPanelWidths = false
                 }
             }
 
@@ -203,18 +233,81 @@ struct ContentView: View {
     private var editorContentWidth: EditorContentWidth {
         EditorContentWidth(rawValue: editorContentWidthValue) ?? .wide
     }
+
+    private var sidebarFrame: PanelFrame {
+        panelFrame(
+            restoredWidth: restoreSplitPanelWidths ? splitPanelWidths.sidebar : nil,
+            minimum: 240,
+            ideal: 280,
+            maximum: 360
+        )
+    }
+
+    private var inspectorFrame: PanelFrame {
+        panelFrame(
+            restoredWidth: restoreSplitPanelWidths ? splitPanelWidths.inspector : nil,
+            minimum: 280,
+            ideal: 320,
+            maximum: 420
+        )
+    }
+
+    private func panelFrame(restoredWidth: CGFloat?, minimum: CGFloat, ideal: CGFloat, maximum: CGFloat) -> PanelFrame {
+        guard let restoredWidth else {
+            return PanelFrame(min: minimum, ideal: ideal, max: maximum)
+        }
+        let width = min(max(restoredWidth, minimum), maximum)
+        return PanelFrame(min: width, ideal: width, max: width)
+    }
+}
+
+private struct SplitPanelWidths: Equatable {
+    var sidebar: CGFloat?
+    var inspector: CGFloat?
+}
+
+private struct PanelFrame {
+    let min: CGFloat
+    let ideal: CGFloat
+    let max: CGFloat
+}
+
+private extension NSView {
+    func largestVerticalSplitView() -> NSSplitView? {
+        var best: NSSplitView?
+        collectLargestVerticalSplitView(into: &best)
+        return best
+    }
+
+    private func collectLargestVerticalSplitView(into best: inout NSSplitView?) {
+        if let splitView = self as? NSSplitView,
+           splitView.isVertical,
+           splitView.arrangedSubviews.count >= 2,
+           splitView.bounds.width > (best?.bounds.width ?? 0) {
+            best = splitView
+        }
+
+        for subview in subviews {
+            subview.collectLargestVerticalSplitView(into: &best)
+        }
+    }
 }
 
 private struct WindowLiveResizeDetector: NSViewRepresentable {
     @Binding var isLiveResizing: Bool
-    var onWillStart: () -> Void
+    let showSidebar: Bool
+    let showInspector: Bool
+    var onWillStart: (SplitPanelWidths?) -> Void
+    var onDidEnd: () -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(isLiveResizing: $isLiveResizing, onWillStart: onWillStart)
+        Coordinator(isLiveResizing: $isLiveResizing, onWillStart: onWillStart, onDidEnd: onDidEnd)
     }
 
     func makeNSView(context: Context) -> LiveResizeDetectorView {
         let view = LiveResizeDetectorView()
+        view.showSidebar = showSidebar
+        view.showInspector = showInspector
         view.onWillStart = context.coordinator.start
         view.onDidEnd = context.coordinator.end
         return view
@@ -223,34 +316,46 @@ private struct WindowLiveResizeDetector: NSViewRepresentable {
     func updateNSView(_ nsView: LiveResizeDetectorView, context: Context) {
         context.coordinator.isLiveResizing = $isLiveResizing
         context.coordinator.onWillStart = onWillStart
+        context.coordinator.onDidEnd = onDidEnd
+        nsView.showSidebar = showSidebar
+        nsView.showInspector = showInspector
         nsView.onWillStart = context.coordinator.start
         nsView.onDidEnd = context.coordinator.end
     }
 
     final class Coordinator {
         var isLiveResizing: Binding<Bool>
-        var onWillStart: () -> Void
+        var onWillStart: (SplitPanelWidths?) -> Void
+        var onDidEnd: () -> Void
 
-        init(isLiveResizing: Binding<Bool>, onWillStart: @escaping () -> Void) {
+        init(
+            isLiveResizing: Binding<Bool>,
+            onWillStart: @escaping (SplitPanelWidths?) -> Void,
+            onDidEnd: @escaping () -> Void
+        ) {
             self.isLiveResizing = isLiveResizing
             self.onWillStart = onWillStart
+            self.onDidEnd = onDidEnd
         }
 
-        func start() {
+        func start(widths: SplitPanelWidths?) {
             guard !isLiveResizing.wrappedValue else { return }
-            onWillStart()
+            onWillStart(widths)
             isLiveResizing.wrappedValue = true
         }
 
         func end() {
             guard isLiveResizing.wrappedValue else { return }
+            onDidEnd()
             isLiveResizing.wrappedValue = false
         }
     }
 }
 
 private final class LiveResizeDetectorView: NSView {
-    var onWillStart: (() -> Void)?
+    var showSidebar = true
+    var showInspector = true
+    var onWillStart: ((SplitPanelWidths?) -> Void)?
     var onDidEnd: (() -> Void)?
 
     private weak var observedWindow: NSWindow?
@@ -274,7 +379,8 @@ private final class LiveResizeDetectorView: NSView {
         let center = NotificationCenter.default
         observers = [
             center.addObserver(forName: NSWindow.willStartLiveResizeNotification, object: window, queue: .main) { [weak self] _ in
-                self?.onWillStart?()
+                guard let self else { return }
+                self.onWillStart?(self.captureSplitPanelWidths())
             },
             center.addObserver(forName: NSWindow.didEndLiveResizeNotification, object: window, queue: .main) { [weak self] _ in
                 self?.onDidEnd?()
@@ -290,22 +396,36 @@ private final class LiveResizeDetectorView: NSView {
         observers = []
         observedWindow = nil
     }
+
+    private func captureSplitPanelWidths() -> SplitPanelWidths? {
+        guard let splitView = window?.contentView?.largestVerticalSplitView() else { return nil }
+        let subviews = splitView.arrangedSubviews
+        guard subviews.count >= 2 else { return nil }
+
+        return SplitPanelWidths(
+            sidebar: showSidebar ? subviews.first?.frame.width : nil,
+            inspector: showInspector ? subviews.last?.frame.width : nil
+        )
+    }
 }
 
 private struct ResizePlaceholderView: NSViewRepresentable {
     let showSidebar: Bool
     let showInspector: Bool
+    let panelWidths: SplitPanelWidths
 
     func makeNSView(context: Context) -> ResizePlaceholderDrawingView {
         let view = ResizePlaceholderDrawingView()
         view.showSidebar = showSidebar
         view.showInspector = showInspector
+        view.panelWidths = panelWidths
         return view
     }
 
     func updateNSView(_ nsView: ResizePlaceholderDrawingView, context: Context) {
         nsView.showSidebar = showSidebar
         nsView.showInspector = showInspector
+        nsView.panelWidths = panelWidths
     }
 }
 
@@ -313,6 +433,11 @@ private final class ResizePlaceholderDrawingView: NSView {
     var showSidebar = true {
         didSet {
             guard oldValue != showSidebar else { return }
+            needsDisplay = true
+        }
+    }
+    var panelWidths = SplitPanelWidths() {
+        didSet {
             needsDisplay = true
         }
     }
@@ -336,8 +461,8 @@ private final class ResizePlaceholderDrawingView: NSView {
         NSColor.windowBackgroundColor.setFill()
         dirtyRect.fill()
 
-        let sidebarWidth = showSidebar ? min(max(bounds.width * 0.24, 240), 300) : 0
-        let inspectorWidth = showInspector ? min(max(bounds.width * 0.24, 280), 340) : 0
+        let sidebarWidth = showSidebar ? min(max(panelWidths.sidebar ?? bounds.width * 0.24, 240), 360) : 0
+        let inspectorWidth = showInspector ? min(max(panelWidths.inspector ?? bounds.width * 0.24, 280), 420) : 0
         let statusHeight: CGFloat = 29
         let headerHeight: CGFloat = 41
         let dividerColor = NSColor.separatorColor

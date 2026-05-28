@@ -1,8 +1,97 @@
+import AppKit
 import SwiftUI
+
+private enum EditorPaneTab: String {
+    case editor
+    case preview
+    case hidden
+}
+
+private struct EditorPaneContainer: NSViewRepresentable {
+    let visiblePane: EditorPaneTab
+    let editorContent: AnyView
+    let previewContent: AnyView
+
+    init(
+        visiblePane: EditorPaneTab,
+        @ViewBuilder editor: () -> some View,
+        @ViewBuilder preview: () -> some View
+    ) {
+        self.visiblePane = visiblePane
+        self.editorContent = AnyView(editor())
+        self.previewContent = AnyView(preview())
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeNSView(context: Context) -> EditorPaneContainerView {
+        let container = EditorPaneContainerView()
+        let editorHost = NSHostingView(rootView: editorContent)
+        let previewHost = NSHostingView(rootView: previewContent)
+        container.editorHost = editorHost
+        container.previewHost = previewHost
+        context.coordinator.editorHost = editorHost
+        context.coordinator.previewHost = previewHost
+        container.visiblePane = visiblePane
+        return container
+    }
+
+    func updateNSView(_ container: EditorPaneContainerView, context: Context) {
+        context.coordinator.editorHost?.rootView = editorContent
+        context.coordinator.previewHost?.rootView = previewContent
+        container.visiblePane = visiblePane
+    }
+
+    final class Coordinator {
+        var editorHost: NSHostingView<AnyView>?
+        var previewHost: NSHostingView<AnyView>?
+    }
+}
+
+private final class EditorPaneContainerView: NSView {
+    var visiblePane: EditorPaneTab = .editor {
+        didSet {
+            needsLayout = true
+        }
+    }
+
+    var editorHost: NSView? {
+        didSet {
+            oldValue?.removeFromSuperview()
+            if let editorHost {
+                addSubview(editorHost)
+                needsLayout = true
+            }
+        }
+    }
+
+    var previewHost: NSView? {
+        didSet {
+            oldValue?.removeFromSuperview()
+            if let previewHost {
+                addSubview(previewHost)
+                needsLayout = true
+            }
+        }
+    }
+
+    override var isFlipped: Bool {
+        true
+    }
+
+    override func layout() {
+        super.layout()
+        let visibleFrame = bounds
+        let stagedFrame = bounds.offsetBy(dx: -bounds.width - 10_000, dy: 0)
+        editorHost?.frame = visiblePane == .editor ? visibleFrame : stagedFrame
+        previewHost?.frame = visiblePane == .preview ? visibleFrame : stagedFrame
+    }
+}
 
 struct EditorView: View {
     @State private var previewReadyDocumentID: String?
-    @State private var editorReadyDocumentID: String?
     @FocusState private var findFieldIsFocused: Bool
     @FocusState private var replaceFieldIsFocused: Bool
 
@@ -47,9 +136,10 @@ struct EditorView: View {
                 let documentID = document.fileURL.path
                 let shouldMountPreview = editorMode == .preview || previewDocumentID == documentID
                 let previewIsReady = previewReadyDocumentID == documentID
-                let editorIsReady = editorReadyDocumentID == documentID
-                let shouldShowPreview = previewIsReady && (editorMode == .preview || !editorIsReady)
-                let shouldShowEditor = editorMode == .preview ? (!previewIsReady && editorIsReady) : (!previewIsReady || editorIsReady)
+                let isPreviewDocumentSwitch = editorMode == .preview && previewDocumentID != documentID
+                let visiblePane: EditorPaneTab = editorMode == .edit
+                    ? .editor
+                    : (previewIsReady ? .preview : (isPreviewDocumentSwitch ? .hidden : .editor))
                 VStack(spacing: 0) {
                     HStack {
                         Image(systemName: "doc.text")
@@ -86,26 +176,7 @@ struct EditorView: View {
                     ZStack {
                         Color(nsColor: .textBackgroundColor)
 
-                        ZStack {
-                            if shouldMountPreview {
-                                MarkdownPreviewView(
-                                    document: document,
-                                    projectRoot: projectRoot,
-                                    sourcePosition: editorSourcePosition,
-                                    isActive: editorMode == .preview,
-                                    onSourcePositionChange: { position in
-                                        onSourcePositionChange(position)
-                                    },
-                                    onPreviewReady: {
-                                        guard editorMode == .preview else { return }
-                                        previewReadyDocumentID = documentID
-                                    }
-                                )
-                                .opacity(shouldShowPreview ? 1 : 0)
-                                .allowsHitTesting(shouldShowPreview)
-                                .accessibilityHidden(editorMode != .preview)
-                            }
-
+                        EditorPaneContainer(visiblePane: visiblePane) {
                             CodeMirrorTextView(
                                 documentID: document.fileURL.path,
                                 text: document.body,
@@ -140,27 +211,38 @@ struct EditorView: View {
                                 },
                                 onEditorReady: {
                                     guard editorMode == .edit else { return }
-                                    editorReadyDocumentID = documentID
                                     previewReadyDocumentID = nil
                                 }
                             )
-                            .opacity(shouldShowEditor ? 1 : 0)
-                            .allowsHitTesting(editorMode == .edit && shouldShowEditor)
-                            .accessibilityHidden(editorMode != .edit)
+                        } preview: {
+                            if shouldMountPreview {
+                                MarkdownPreviewView(
+                                    document: document,
+                                    projectRoot: projectRoot,
+                                    sourcePosition: editorSourcePosition,
+                                    isActive: editorMode == .preview,
+                                    onSourcePositionChange: { position in
+                                        onSourcePositionChange(position)
+                                    },
+                                    onPreviewReady: {
+                                        guard editorMode == .preview else { return }
+                                        previewReadyDocumentID = documentID
+                                    }
+                                )
+                                .accessibilityHidden(editorMode != .preview)
+                            } else {
+                                Color.clear
+                            }
                         }
                         .frame(maxWidth: contentMaxWidth)
                     }
                 }
                 .onChange(of: documentID) { _ in
                     previewReadyDocumentID = nil
-                    editorReadyDocumentID = nil
                 }
                 .onChange(of: editorMode) { mode in
                     if mode == .preview {
                         previewReadyDocumentID = nil
-                        editorReadyDocumentID = documentID
-                    } else {
-                        editorReadyDocumentID = nil
                     }
                 }
                 .onChange(of: isFindVisible) { isVisible in
