@@ -1,0 +1,14 @@
+{
+  "scripts": {
+    "build:codemirror": "esbuild Resources/CodeMirror/editor.js --bundle --format=iife --outfile=Resources/CodeMirror/editor.bundle.js"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.10.3",
+    "@codemirror/lang-markdown": "^6.3.4",
+    "@codemirror/language": "^6.11.3",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/view": "^6.38.1",
+    "@lezer/highlight": "^1.2.1",
+    "esbuild": "^0.25.5"
+  }
+}

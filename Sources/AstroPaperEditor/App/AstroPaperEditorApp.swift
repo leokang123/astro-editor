@@ -52,12 +52,12 @@ struct AstroPaperEditorApp: App {
                 .keyboardShortcut("f", modifiers: .command)
 
                 Button("Find Next") {
-                    _ = EditorCommandDispatcher.performTextFinderAction(.nextMatch)
+                    store.findNextInEditor()
                 }
                 .keyboardShortcut("g", modifiers: .command)
 
                 Button("Find Previous") {
-                    _ = EditorCommandDispatcher.performTextFinderAction(.previousMatch)
+                    store.findPreviousInEditor()
                 }
                 .keyboardShortcut("g", modifiers: [.command, .shift])
             }
@@ -88,9 +88,9 @@ enum EditorCommandDispatcher {
         case ("f", false):
             return store?.showEditorFindInterface() ?? performTextFinderAction(.showFindInterface)
         case ("g", false):
-            return performTextFinderAction(.nextMatch)
+            return store?.findNextInEditor() ?? performTextFinderAction(.nextMatch)
         case ("g", true):
-            return performTextFinderAction(.previousMatch)
+            return store?.findPreviousInEditor() ?? performTextFinderAction(.previousMatch)
         default:
             return false
         }

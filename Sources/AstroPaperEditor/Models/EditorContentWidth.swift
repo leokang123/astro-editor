@@ -23,9 +23,9 @@ enum EditorContentWidth: String, CaseIterable, Identifiable {
     var maxWidth: CGFloat {
         switch self {
         case .comfortable:
-            return 980
+            return 760
         case .wide:
-            return 1180
+            return 980
         case .full:
             return .infinity
         }

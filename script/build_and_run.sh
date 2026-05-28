@@ -20,6 +20,10 @@ ICON_FILE="$ROOT_DIR/Resources/AppIcon.icns"
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 
+if [[ -f "$ROOT_DIR/package.json" && -d "$ROOT_DIR/node_modules" ]]; then
+  npm run build:codemirror
+fi
+
 swift build
 BUILD_BINARY="$(swift build --show-bin-path)/$APP_NAME"
 
@@ -33,6 +37,9 @@ fi
 for resource in "$ROOT_DIR"/Resources/AstroPaperStarter.*; do
   [[ -f "$resource" ]] && cp "$resource" "$APP_RESOURCES/"
 done
+if [[ -d "$ROOT_DIR/Resources/CodeMirror" ]]; then
+  cp -R "$ROOT_DIR/Resources/CodeMirror" "$APP_RESOURCES/"
+fi
 
 cat >"$INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

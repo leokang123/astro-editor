@@ -21,6 +21,18 @@ final class BlogStore: ObservableObject {
     @Published var isAssetOptimizeRunning = false
     @Published var message: AppMessage?
     @Published var editorMode: EditorMode = .edit
+    @Published var isEditorFindVisible = false
+    @Published var isEditorReplaceVisible = false
+    @Published var editorFindQuery = ""
+    @Published var editorFindDirection = 1
+    @Published var editorFindGeneration = 0
+    @Published var editorFindFocusGeneration = 0
+    @Published var editorReplaceText = ""
+    @Published var editorReplaceGeneration = 0
+    @Published var editorReplaceAllGeneration = 0
+    @Published var editorFindCurrentMatch = 0
+    @Published var editorFindTotalMatches = 0
+    @Published var editorFindReplacementCount: Int?
     @Published private(set) var previewDocumentID: String?
     @Published var activeSheet: ActiveSheet?
     @Published var creationParentID: String?
@@ -441,16 +453,56 @@ final class BlogStore: ObservableObject {
         guard currentDocument != nil else { return false }
         if editorMode == .preview {
             toggleEditorMode()
-            DispatchQueue.main.async {
-                _ = EditorCommandDispatcher.performTextFinderAction(.showFindInterface)
-            }
-            return true
         }
-        return EditorCommandDispatcher.performTextFinderAction(.showFindInterface)
+        if !isEditorFindVisible {
+            isEditorReplaceVisible = false
+        }
+        isEditorFindVisible = true
+        editorFindFocusGeneration += 1
+        editorFindReplacementCount = nil
+        return true
     }
 
-    private func hideEditorFindInterface() {
-        _ = EditorCommandDispatcher.performTextFinderAction(.hideFindInterface, focusTextView: false)
+    func hideEditorFindInterface() {
+        isEditorFindVisible = false
+        isEditorReplaceVisible = false
+        editorFindReplacementCount = nil
+    }
+
+    @discardableResult
+    func findNextInEditor() -> Bool {
+        guard showEditorFindInterface(), !editorFindQuery.isEmpty else { return false }
+        editorFindDirection = 1
+        editorFindGeneration += 1
+        return true
+    }
+
+    @discardableResult
+    func findPreviousInEditor() -> Bool {
+        guard showEditorFindInterface(), !editorFindQuery.isEmpty else { return false }
+        editorFindDirection = -1
+        editorFindGeneration += 1
+        return true
+    }
+
+    @discardableResult
+    func replaceCurrentInEditor() -> Bool {
+        guard showEditorFindInterface(), !editorFindQuery.isEmpty else { return false }
+        editorReplaceGeneration += 1
+        return true
+    }
+
+    @discardableResult
+    func replaceAllInEditor() -> Bool {
+        guard showEditorFindInterface(), !editorFindQuery.isEmpty else { return false }
+        editorReplaceAllGeneration += 1
+        return true
+    }
+
+    func updateEditorFindStatus(current: Int, total: Int, replacementCount: Int?) {
+        editorFindCurrentMatch = current
+        editorFindTotalMatches = total
+        editorFindReplacementCount = replacementCount
     }
 
     func requestNewCategory(parentID: String? = nil) {
