@@ -113,101 +113,129 @@ struct ContentView: View {
     }
 
     private var mainContent: some View {
-        VStack(spacing: 0) {
-            HSplitView {
-                if showSidebar {
-                    sidebarPanel
-                        .frame(
-                            minWidth: PanelMetrics.sidebarWidth,
-                            idealWidth: PanelMetrics.sidebarWidth,
-                            maxWidth: PanelMetrics.sidebarWidth
-                        )
-                }
+        GeometryReader { proxy in
+            VStack(spacing: 0) {
+                fixedPaneLayout(topInset: proxy.safeAreaInsets.top)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                editorAndInspector
+                Divider()
+                StatusBar(
+                    projectName: store.hasProject ? store.projectRoot.lastPathComponent : "No project selected",
+                    projectRootPath: store.projectRoot.displayPath,
+                    isDirty: store.isDirty,
+                    modeText: store.currentDocument == nil ? nil : (store.editorMode == .edit ? "Markdown" : "Preview"),
+                    statusText: store.statusText
+                )
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            Divider()
-            StatusBar(
-                projectName: store.hasProject ? store.projectRoot.lastPathComponent : "No project selected",
-                projectRootPath: store.projectRoot.displayPath,
-                isDirty: store.isDirty,
-                modeText: store.currentDocument == nil ? nil : (store.editorMode == .edit ? "Markdown" : "Preview"),
-                statusText: store.statusText
-            )
+            .ignoresSafeArea(edges: .top)
         }
     }
 
-    private var editorAndInspector: some View {
+    private func fixedPaneLayout(topInset: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            if showSidebar {
+                panel(background: AnyShapeStyle(.bar), topInset: topInset) {
+                    sidebarPanel
+                }
+                .frame(width: PanelMetrics.sidebarWidth)
+
+                paneDivider
+            }
+
+            editorAndInspector(topInset: topInset)
+        }
+    }
+
+    private func editorAndInspector(topInset: CGFloat) -> some View {
         ZStack {
             if isLiveResizing {
                 Color.clear
             }
 
-            HSplitView {
-                EditorView(
-                    document: store.currentDocument,
-                    hasProject: store.hasProject,
-                    editorMode: store.editorMode,
-                    previewDocumentID: store.previewDocumentID,
-                    editorSourcePosition: store.editorSourcePosition,
-                    projectRoot: store.projectRoot,
-                    isFindVisible: $store.isEditorFindVisible,
-                    isReplaceVisible: $store.isEditorReplaceVisible,
-                    findQuery: $store.editorFindQuery,
-                    findDirection: store.editorFindDirection,
-                    findGeneration: store.editorFindGeneration,
-                    findFocusGeneration: store.editorFindFocusGeneration,
-                    replaceText: $store.editorReplaceText,
-                    replaceGeneration: store.editorReplaceGeneration,
-                    replaceAllGeneration: store.editorReplaceAllGeneration,
-                    findCurrentMatch: store.editorFindCurrentMatch,
-                    findTotalMatches: store.editorFindTotalMatches,
-                    findReplacementCount: store.editorFindReplacementCount,
-                    onOpenProject: store.chooseProjectFolder,
-                    onCloseUnavailableDocument: store.closeUnavailableProjectDocument,
-                    onTogglePreview: store.toggleEditorMode,
-                    onTextChange: store.markBodyChanged,
-                    onRegisterBodyProvider: store.setEditorBodyProvider,
-                    onRegisterSourcePositionProvider: store.setEditorSourcePositionProvider,
-                    onInsertImages: store.insertImages,
-                    onSourcePositionChange: store.updateEditorSourcePosition,
-                    onFindRequested: store.showEditorFindInterface,
-                    onFindNext: store.findNextInEditor,
-                    onFindPrevious: store.findPreviousInEditor,
-                    onReplaceCurrent: store.replaceCurrentInEditor,
-                    onReplaceAll: store.replaceAllInEditor,
-                    onFindStatusChange: store.updateEditorFindStatus,
-                    onCloseFind: store.hideEditorFindInterface,
-                    contentMaxWidth: editorContentWidth.maxWidth
-                )
-                .frame(width: isLiveResizing ? 0 : nil)
-                .frame(minWidth: isLiveResizing ? 0 : 420, maxWidth: isLiveResizing ? 0 : .infinity)
-                .clipped()
+            HStack(spacing: 0) {
+                panel(background: PanelColors.contentBackground, topInset: topInset) {
+                    EditorView(
+                        document: store.currentDocument,
+                        hasProject: store.hasProject,
+                        editorMode: store.editorMode,
+                        previewDocumentID: store.previewDocumentID,
+                        editorSourcePosition: store.editorSourcePosition,
+                        projectRoot: store.projectRoot,
+                        isFindVisible: $store.isEditorFindVisible,
+                        isReplaceVisible: $store.isEditorReplaceVisible,
+                        findQuery: $store.editorFindQuery,
+                        findDirection: store.editorFindDirection,
+                        findGeneration: store.editorFindGeneration,
+                        findFocusGeneration: store.editorFindFocusGeneration,
+                        replaceText: $store.editorReplaceText,
+                        replaceGeneration: store.editorReplaceGeneration,
+                        replaceAllGeneration: store.editorReplaceAllGeneration,
+                        findCurrentMatch: store.editorFindCurrentMatch,
+                        findTotalMatches: store.editorFindTotalMatches,
+                        findReplacementCount: store.editorFindReplacementCount,
+                        onOpenProject: store.chooseProjectFolder,
+                        onCloseUnavailableDocument: store.closeUnavailableProjectDocument,
+                        onTogglePreview: store.toggleEditorMode,
+                        onTextChange: store.markBodyChanged,
+                        onRegisterBodyProvider: store.setEditorBodyProvider,
+                        onRegisterSourcePositionProvider: store.setEditorSourcePositionProvider,
+                        onInsertImages: store.insertImages,
+                        onSourcePositionChange: store.updateEditorSourcePosition,
+                        onFindRequested: store.showEditorFindInterface,
+                        onFindNext: store.findNextInEditor,
+                        onFindPrevious: store.findPreviousInEditor,
+                        onReplaceCurrent: store.replaceCurrentInEditor,
+                        onReplaceAll: store.replaceAllInEditor,
+                        onFindStatusChange: store.updateEditorFindStatus,
+                        onCloseFind: store.hideEditorFindInterface,
+                        contentMaxWidth: editorContentWidth.maxWidth
+                    )
+                }
+                .frame(minWidth: 420, maxWidth: .infinity)
                 .allowsHitTesting(!isLiveResizing)
 
                 if showInspector {
-                    InspectorView(
-                        document: store.currentDocument,
-                        onUpdateFrontmatter: store.updateFrontmatter,
-                        onFrontmatterChange: store.markFrontmatterChanged,
-                        onRegisterFrontmatterProvider: store.setFrontmatterProvider,
-                        onSetOGImage: store.setOGImage,
-                        onClearOGImage: store.clearOGImage,
-                        onResolveAssetImageURL: store.resolvedAssetImageURL
-                    )
-                    .frame(
-                        minWidth: isLiveResizing ? 0 : PanelMetrics.inspectorWidth,
-                        idealWidth: isLiveResizing ? 0 : PanelMetrics.inspectorWidth,
-                        maxWidth: isLiveResizing ? 0 : PanelMetrics.inspectorWidth
-                    )
-                    .clipped()
+                    paneDivider
+
+                    panel(background: PanelColors.contentBackground, topInset: topInset) {
+                        InspectorView(
+                            document: store.currentDocument,
+                            onUpdateFrontmatter: store.updateFrontmatter,
+                            onFrontmatterChange: store.markFrontmatterChanged,
+                            onRegisterFrontmatterProvider: store.setFrontmatterProvider,
+                            onSetOGImage: store.setOGImage,
+                            onClearOGImage: store.clearOGImage,
+                            onResolveAssetImageURL: store.resolvedAssetImageURL
+                        )
+                    }
+                    .frame(width: PanelMetrics.inspectorWidth)
                     .allowsHitTesting(!isLiveResizing)
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func panel<Content: View>(
+        background: AnyShapeStyle,
+        topInset: CGFloat,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        ZStack {
+            Rectangle()
+                .fill(background)
+
+            content()
+                .padding(.top, topInset)
+        }
+        .clipped()
+    }
+
+    private var paneDivider: some View {
+        Rectangle()
+            .fill(Color(nsColor: .separatorColor))
+            .frame(width: PanelMetrics.dividerWidth)
+            .allowsHitTesting(false)
     }
 
     private var sidebarPanel: some View {
@@ -236,6 +264,11 @@ struct ContentView: View {
 private enum PanelMetrics {
     static let sidebarWidth: CGFloat = 280
     static let inspectorWidth: CGFloat = 320
+    static let dividerWidth: CGFloat = 1
+}
+
+private enum PanelColors {
+    static let contentBackground = AnyShapeStyle(Color(nsColor: .underPageBackgroundColor))
 }
 
 private struct LiveResizeStateObserver: NSViewRepresentable {
