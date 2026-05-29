@@ -18,6 +18,9 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
+            WindowChromeConfigurator()
+                .frame(width: 0, height: 0)
+
             WindowLiveResizeDetector(
                 isLiveResizing: $isLiveResizing,
                 showSidebar: showSidebar,
@@ -270,6 +273,48 @@ private struct PanelFrame {
     let min: CGFloat
     let ideal: CGFloat
     let max: CGFloat
+}
+
+private struct WindowChromeConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> WindowChromeConfigurationView {
+        WindowChromeConfigurationView()
+    }
+
+    func updateNSView(_ nsView: WindowChromeConfigurationView, context: Context) {
+        nsView.configureWindowChrome()
+    }
+}
+
+private final class WindowChromeConfigurationView: NSView {
+    private var pendingAttempts = 0
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        configureWindowChrome()
+    }
+
+    func configureWindowChrome() {
+        pendingAttempts = 8
+        applyWindowChromeConfiguration()
+        scheduleWindowChromeConfiguration()
+    }
+
+    private func applyWindowChromeConfiguration() {
+        window?.styleMask.insert(.fullSizeContentView)
+        window?.titlebarAppearsTransparent = true
+        window?.toolbar?.showsBaselineSeparator = false
+        window?.titlebarSeparatorStyle = .none
+    }
+
+    private func scheduleWindowChromeConfiguration() {
+        guard pendingAttempts > 0 else { return }
+        pendingAttempts -= 1
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.applyWindowChromeConfiguration()
+            self.scheduleWindowChromeConfiguration()
+        }
+    }
 }
 
 private extension NSView {
