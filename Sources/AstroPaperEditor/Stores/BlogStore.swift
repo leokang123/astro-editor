@@ -381,16 +381,6 @@ final class BlogStore: ObservableObject {
         documentSession.setSourcePositionProvider(provider)
     }
 
-    func prepareForLiveResize() {
-        guard currentDocument != nil else { return }
-        captureEditorSourcePosition()
-        flushSessionDraftsToCurrentDocument()
-        previewDocumentID = nil
-        if editorMode == .preview {
-            editorMode = .edit
-        }
-    }
-
     func setFrontmatterProvider(_ provider: FrontmatterDraftProvider?) {
         documentSession.setFrontmatterProvider(provider)
     }
