@@ -7,7 +7,6 @@ struct ContentView: View {
     @SceneStorage("showSidebar") private var showSidebar = true
     @SceneStorage("showInspector") private var showInspector = true
     @AppStorage(EditorContentWidth.storageKey) private var editorContentWidthValue = EditorContentWidth.wide.rawValue
-    @State private var isLiveResizing = false
 
     init(store: BlogStore) {
         self.store = store
@@ -17,9 +16,6 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             WindowChromeConfigurator()
-                .frame(width: 0, height: 0)
-
-            LiveResizeStateObserver(isLiveResizing: $isLiveResizing)
                 .frame(width: 0, height: 0)
 
             mainContent
@@ -133,12 +129,13 @@ struct ContentView: View {
 
     private func fixedPaneLayout(topInset: CGFloat) -> some View {
         HStack(spacing: 0) {
-            if showSidebar {
-                panel(background: AnyShapeStyle(.bar), topInset: topInset) {
-                    sidebarPanel
-                }
-                .frame(width: PanelMetrics.sidebarWidth)
+            panel(background: AnyShapeStyle(.bar), topInset: topInset) {
+                sidebarPanel
+            }
+            .frame(width: showSidebar ? PanelMetrics.sidebarWidth : 0)
+            .allowsHitTesting(showSidebar)
 
+            if showSidebar {
                 paneDivider
             }
 
@@ -147,70 +144,62 @@ struct ContentView: View {
     }
 
     private func editorAndInspector(topInset: CGFloat) -> some View {
-        ZStack {
-            if isLiveResizing {
-                Color.clear
+        HStack(spacing: 0) {
+            panel(background: PanelColors.contentBackground, topInset: topInset) {
+                EditorView(
+                    document: store.currentDocument,
+                    hasProject: store.hasProject,
+                    editorMode: store.editorMode,
+                    previewDocumentID: store.previewDocumentID,
+                    editorSourcePosition: store.editorSourcePosition,
+                    projectRoot: store.projectRoot,
+                    isFindVisible: $store.isEditorFindVisible,
+                    isReplaceVisible: $store.isEditorReplaceVisible,
+                    findQuery: $store.editorFindQuery,
+                    findDirection: store.editorFindDirection,
+                    findGeneration: store.editorFindGeneration,
+                    findFocusGeneration: store.editorFindFocusGeneration,
+                    replaceText: $store.editorReplaceText,
+                    replaceGeneration: store.editorReplaceGeneration,
+                    replaceAllGeneration: store.editorReplaceAllGeneration,
+                    findCurrentMatch: store.editorFindCurrentMatch,
+                    findTotalMatches: store.editorFindTotalMatches,
+                    findReplacementCount: store.editorFindReplacementCount,
+                    onOpenProject: store.chooseProjectFolder,
+                    onCloseUnavailableDocument: store.closeUnavailableProjectDocument,
+                    onTogglePreview: store.toggleEditorMode,
+                    onTextChange: store.markBodyChanged,
+                    onRegisterBodyProvider: store.setEditorBodyProvider,
+                    onRegisterSourcePositionProvider: store.setEditorSourcePositionProvider,
+                    onInsertImages: store.insertImages,
+                    onSourcePositionChange: store.updateEditorSourcePosition,
+                    onFindRequested: store.showEditorFindInterface,
+                    onFindNext: store.findNextInEditor,
+                    onFindPrevious: store.findPreviousInEditor,
+                    onReplaceCurrent: store.replaceCurrentInEditor,
+                    onReplaceAll: store.replaceAllInEditor,
+                    onFindStatusChange: store.updateEditorFindStatus,
+                    onCloseFind: store.hideEditorFindInterface,
+                    contentMaxWidth: editorContentWidth.maxWidth
+                )
             }
+            .frame(minWidth: 420, maxWidth: .infinity)
 
-            HStack(spacing: 0) {
+            if showInspector {
+                paneDivider
+
                 panel(background: PanelColors.contentBackground, topInset: topInset) {
-                    EditorView(
+                    InspectorView(
                         document: store.currentDocument,
-                        hasProject: store.hasProject,
-                        editorMode: store.editorMode,
-                        previewDocumentID: store.previewDocumentID,
-                        editorSourcePosition: store.editorSourcePosition,
-                        projectRoot: store.projectRoot,
-                        isFindVisible: $store.isEditorFindVisible,
-                        isReplaceVisible: $store.isEditorReplaceVisible,
-                        findQuery: $store.editorFindQuery,
-                        findDirection: store.editorFindDirection,
-                        findGeneration: store.editorFindGeneration,
-                        findFocusGeneration: store.editorFindFocusGeneration,
-                        replaceText: $store.editorReplaceText,
-                        replaceGeneration: store.editorReplaceGeneration,
-                        replaceAllGeneration: store.editorReplaceAllGeneration,
-                        findCurrentMatch: store.editorFindCurrentMatch,
-                        findTotalMatches: store.editorFindTotalMatches,
-                        findReplacementCount: store.editorFindReplacementCount,
-                        onOpenProject: store.chooseProjectFolder,
-                        onCloseUnavailableDocument: store.closeUnavailableProjectDocument,
-                        onTogglePreview: store.toggleEditorMode,
-                        onTextChange: store.markBodyChanged,
-                        onRegisterBodyProvider: store.setEditorBodyProvider,
-                        onRegisterSourcePositionProvider: store.setEditorSourcePositionProvider,
-                        onInsertImages: store.insertImages,
-                        onSourcePositionChange: store.updateEditorSourcePosition,
-                        onFindRequested: store.showEditorFindInterface,
-                        onFindNext: store.findNextInEditor,
-                        onFindPrevious: store.findPreviousInEditor,
-                        onReplaceCurrent: store.replaceCurrentInEditor,
-                        onReplaceAll: store.replaceAllInEditor,
-                        onFindStatusChange: store.updateEditorFindStatus,
-                        onCloseFind: store.hideEditorFindInterface,
-                        contentMaxWidth: editorContentWidth.maxWidth
+                        onUpdateFrontmatter: store.updateFrontmatter,
+                        onFrontmatterChange: store.markFrontmatterChanged,
+                        onRegisterFrontmatterProvider: store.setFrontmatterProvider,
+                        onSetOGImage: store.setOGImage,
+                        onClearOGImage: store.clearOGImage,
+                        onResolveAssetImageURL: store.resolvedAssetImageURL
                     )
                 }
-                .frame(minWidth: 420, maxWidth: .infinity)
-                .allowsHitTesting(!isLiveResizing)
-
-                if showInspector {
-                    paneDivider
-
-                    panel(background: PanelColors.contentBackground, topInset: topInset) {
-                        InspectorView(
-                            document: store.currentDocument,
-                            onUpdateFrontmatter: store.updateFrontmatter,
-                            onFrontmatterChange: store.markFrontmatterChanged,
-                            onRegisterFrontmatterProvider: store.setFrontmatterProvider,
-                            onSetOGImage: store.setOGImage,
-                            onClearOGImage: store.clearOGImage,
-                            onResolveAssetImageURL: store.resolvedAssetImageURL
-                        )
-                    }
-                    .frame(width: PanelMetrics.inspectorWidth)
-                    .allowsHitTesting(!isLiveResizing)
-                }
+                .frame(width: PanelMetrics.inspectorWidth)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -269,96 +258,6 @@ private enum PanelMetrics {
 
 private enum PanelColors {
     static let contentBackground = AnyShapeStyle(Color(nsColor: .underPageBackgroundColor))
-}
-
-private struct LiveResizeStateObserver: NSViewRepresentable {
-    @Binding var isLiveResizing: Bool
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(isLiveResizing: $isLiveResizing)
-    }
-
-    func makeNSView(context: Context) -> LiveResizeStateView {
-        let view = LiveResizeStateView()
-        view.onWillStart = context.coordinator.start
-        view.onDidEnd = context.coordinator.end
-        return view
-    }
-
-    func updateNSView(_ nsView: LiveResizeStateView, context: Context) {
-        context.coordinator.isLiveResizing = $isLiveResizing
-        nsView.onWillStart = context.coordinator.start
-        nsView.onDidEnd = context.coordinator.end
-    }
-
-    final class Coordinator {
-        var isLiveResizing: Binding<Bool>
-
-        init(isLiveResizing: Binding<Bool>) {
-            self.isLiveResizing = isLiveResizing
-        }
-
-        func start() {
-            guard !isLiveResizing.wrappedValue else { return }
-            isLiveResizing.wrappedValue = true
-        }
-
-        func end() {
-            guard isLiveResizing.wrappedValue else { return }
-            isLiveResizing.wrappedValue = false
-        }
-    }
-}
-
-private final class LiveResizeStateView: NSView {
-    var onWillStart: (() -> Void)?
-    var onDidEnd: (() -> Void)?
-
-    private weak var observedWindow: NSWindow?
-    private var observers: [NSObjectProtocol] = []
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        observeCurrentWindow()
-    }
-
-    deinit {
-        removeObservers()
-    }
-
-    private func observeCurrentWindow() {
-        guard window !== observedWindow else { return }
-        removeObservers()
-        observedWindow = window
-
-        guard let window else { return }
-        let center = NotificationCenter.default
-        observers = [
-            center.addObserver(
-                forName: NSWindow.willStartLiveResizeNotification,
-                object: window,
-                queue: .main
-            ) { [weak self] _ in
-                self?.onWillStart?()
-            },
-            center.addObserver(
-                forName: NSWindow.didEndLiveResizeNotification,
-                object: window,
-                queue: .main
-            ) { [weak self] _ in
-                self?.onDidEnd?()
-            }
-        ]
-    }
-
-    private func removeObservers() {
-        let center = NotificationCenter.default
-        for observer in observers {
-            center.removeObserver(observer)
-        }
-        observers = []
-        observedWindow = nil
-    }
 }
 
 private struct WindowChromeConfigurator: NSViewRepresentable {
