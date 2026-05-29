@@ -17,11 +17,6 @@ APP_RESOURCES="$APP_CONTENTS/Resources"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 ICON_FILE="$ROOT_DIR/Resources/AppIcon.icns"
-SWIFT_BUILD_OPTIONS=()
-
-if [[ -n "${SWIFT_BUILD_FLAGS:-}" ]]; then
-  read -r -a SWIFT_BUILD_OPTIONS <<< "$SWIFT_BUILD_FLAGS"
-fi
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 
@@ -33,8 +28,8 @@ if [[ -f "$ROOT_DIR/package.json" ]]; then
   npm run build:codemirror
 fi
 
-swift build "${SWIFT_BUILD_OPTIONS[@]}"
-BUILD_BINARY="$(swift build "${SWIFT_BUILD_OPTIONS[@]}" --show-bin-path)/$APP_NAME"
+swift build
+BUILD_BINARY="$(swift build --show-bin-path)/$APP_NAME"
 
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES"

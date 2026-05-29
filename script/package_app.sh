@@ -32,8 +32,13 @@ if [[ -f "$ROOT_DIR/package.json" ]]; then
   npm run build:codemirror
 fi
 
-swift build -c release "${SWIFT_BUILD_OPTIONS[@]}"
-BUILD_BINARY="$(swift build -c release "${SWIFT_BUILD_OPTIONS[@]}" --show-bin-path)/$APP_NAME"
+if [[ ${#SWIFT_BUILD_OPTIONS[@]} -gt 0 ]]; then
+  swift build -c release "${SWIFT_BUILD_OPTIONS[@]}"
+  BUILD_BINARY="$(swift build -c release "${SWIFT_BUILD_OPTIONS[@]}" --show-bin-path)/$APP_NAME"
+else
+  swift build -c release
+  BUILD_BINARY="$(swift build -c release --show-bin-path)/$APP_NAME"
+fi
 
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES"
