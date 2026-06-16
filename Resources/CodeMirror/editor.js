@@ -1,4 +1,5 @@
-import {history, historyKeymap, standardKeymap} from "@codemirror/commands";
+import {history, historyKeymap, indentWithTab, standardKeymap} from "@codemirror/commands";
+import {closeBrackets, closeBracketsKeymap} from "@codemirror/autocomplete";
 import {markdown} from "@codemirror/lang-markdown";
 import {syntaxHighlighting, HighlightStyle, bracketMatching} from "@codemirror/language";
 import {EditorState, StateEffect, StateField, Transaction} from "@codemirror/state";
@@ -270,6 +271,10 @@ const editorExtensions = [
     dropCursor(),
     syntaxHighlighting(markdownHighlightStyle),
     bracketMatching(),
+    closeBrackets(),
+    EditorState.languageData.of(() => [{
+      closeBrackets: {brackets: ["(", "[", "{", "'", '"', "`", "*"]}
+    }]),
     EditorView.lineWrapping,
     placeholder("Start writing Markdown..."),
     scrollPastEnd(),
@@ -277,6 +282,8 @@ const editorExtensions = [
     searchHighlightField,
     keymap.of([
       ...historyKeymap,
+      ...closeBracketsKeymap,
+      indentWithTab,
       ...standardKeymap
     ]),
     EditorView.updateListener.of(update => {
