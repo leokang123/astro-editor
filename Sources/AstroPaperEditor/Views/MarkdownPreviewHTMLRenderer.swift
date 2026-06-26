@@ -21,6 +21,7 @@ struct MarkdownPreviewHTMLRenderer {
               color-scheme: light dark;
               --bg: Canvas;
               --fg: CanvasText;
+              --body-fg: color-mix(in srgb, CanvasText 82%, transparent);
               --muted: color-mix(in srgb, CanvasText 58%, transparent);
               --rule: color-mix(in srgb, CanvasText 16%, transparent);
               --code-bg: color-mix(in srgb, CanvasText 8%, transparent);
@@ -30,7 +31,7 @@ struct MarkdownPreviewHTMLRenderer {
               margin: 0;
               padding: 0;
               background: var(--bg);
-              color: var(--fg);
+              color: var(--body-fg);
               font: -apple-system-body;
             }
             body {
@@ -62,6 +63,7 @@ struct MarkdownPreviewHTMLRenderer {
               margin: 18px 0 22px;
             }
             h1, h2, h3, h4, h5, h6 {
+              color: var(--fg);
               line-height: 1.25;
               margin: 1.2em 0 0.45em;
             }
@@ -86,6 +88,10 @@ struct MarkdownPreviewHTMLRenderer {
               margin-bottom: 0.25em;
             }
             a { color: LinkText; }
+            strong {
+              color: var(--fg);
+              font-weight: 800;
+            }
             .source-line-anchor {
               scroll-margin-top: 0;
             }

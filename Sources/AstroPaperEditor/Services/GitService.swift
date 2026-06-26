@@ -20,7 +20,7 @@ final class GitService {
 
         let branch = currentBranch(at: projectRoot)
         let remote = (try? runGit(["remote", "get-url", "origin"], at: projectRoot).trimmedOutput) ?? ""
-        let changes = (try? runGit(["status", "--short"], at: projectRoot).trimmedOutput) ?? ""
+        let changes = (try? runGit(["-c", "core.quotePath=false", "status", "--short"], at: projectRoot).trimmedOutput) ?? ""
         let summary = changes.isEmpty ? "Working tree clean" : summarizeChanges(changes)
 
         return GitRepositoryStatus(
@@ -108,7 +108,7 @@ final class GitService {
             throw GitServiceError.missingBranch
         }
 
-        let beforeAdd = try runGit(["status", "--short"], at: projectRoot).trimmedOutput
+        let beforeAdd = try runGit(["-c", "core.quotePath=false", "status", "--short"], at: projectRoot).trimmedOutput
         guard !beforeAdd.isEmpty else {
             return "No changes to commit."
         }

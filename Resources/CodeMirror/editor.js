@@ -197,6 +197,40 @@ const replaceAll = (query, replacement) => {
   return changes.length;
 };
 
+const wrapSelection = marker => view => {
+  const selection = view.state.selection.main;
+  const selectedText = view.state.doc.sliceString(selection.from, selection.to);
+  view.dispatch({
+    changes: {from: selection.from, to: selection.to, insert: `${marker}${selectedText}${marker}`},
+    selection: {
+      anchor: selection.from + marker.length,
+      head: selection.from + marker.length + selectedText.length
+    },
+    scrollIntoView: true
+  });
+  return true;
+};
+
+const insertLink = view => {
+  const selection = view.state.selection.main;
+  const selectedText = view.state.doc.sliceString(selection.from, selection.to);
+  const url = "https://";
+  const insert = `[${selectedText}](${url})`;
+  const urlStart = selection.from + selectedText.length + 3;
+  view.dispatch({
+    changes: {from: selection.from, to: selection.to, insert},
+    selection: {anchor: urlStart, head: urlStart + url.length},
+    scrollIntoView: true
+  });
+  return true;
+};
+
+const markdownFormattingKeymap = [
+  {key: "Mod-b", run: wrapSelection("**"), preventDefault: true},
+  {key: "Mod-i", run: wrapSelection("*"), preventDefault: true},
+  {key: "Mod-k", run: insertLink, preventDefault: true}
+];
+
 const theme = EditorView.theme({
   "&": {
     height: "100%",
@@ -283,6 +317,7 @@ const editorExtensions = [
     keymap.of([
       ...historyKeymap,
       ...closeBracketsKeymap,
+      ...markdownFormattingKeymap,
       indentWithTab,
       ...standardKeymap
     ]),

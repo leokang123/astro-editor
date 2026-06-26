@@ -24997,6 +24997,37 @@
     updateSearchHighlights(query, changes.length);
     return changes.length;
   };
+  var wrapSelection = (marker) => (view2) => {
+    const selection = view2.state.selection.main;
+    const selectedText = view2.state.doc.sliceString(selection.from, selection.to);
+    view2.dispatch({
+      changes: { from: selection.from, to: selection.to, insert: `${marker}${selectedText}${marker}` },
+      selection: {
+        anchor: selection.from + marker.length,
+        head: selection.from + marker.length + selectedText.length
+      },
+      scrollIntoView: true
+    });
+    return true;
+  };
+  var insertLink = (view2) => {
+    const selection = view2.state.selection.main;
+    const selectedText = view2.state.doc.sliceString(selection.from, selection.to);
+    const url = "https://";
+    const insert2 = `[${selectedText}](${url})`;
+    const urlStart = selection.from + selectedText.length + 3;
+    view2.dispatch({
+      changes: { from: selection.from, to: selection.to, insert: insert2 },
+      selection: { anchor: urlStart, head: urlStart + url.length },
+      scrollIntoView: true
+    });
+    return true;
+  };
+  var markdownFormattingKeymap = [
+    { key: "Mod-b", run: wrapSelection("**"), preventDefault: true },
+    { key: "Mod-i", run: wrapSelection("*"), preventDefault: true },
+    { key: "Mod-k", run: insertLink, preventDefault: true }
+  ];
   var theme2 = EditorView.theme({
     "&": {
       height: "100%",
@@ -25081,6 +25112,7 @@
     keymap.of([
       ...historyKeymap,
       ...closeBracketsKeymap,
+      ...markdownFormattingKeymap,
       indentWithTab,
       ...standardKeymap
     ]),
