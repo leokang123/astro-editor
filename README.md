@@ -14,8 +14,8 @@ Download the latest build from GitHub Releases:
 
 The release includes:
 
-- `AstroPaperEditor-v0.4.3.dmg`
-- `AstroPaperEditor-v0.4.3.zip`
+- `AstroPaperEditor-v0.5.5.dmg`
+- `AstroPaperEditor-v0.5.5.zip`
 
 Open the DMG and move `AstroPaperEditor.app` to your Applications folder.
 
