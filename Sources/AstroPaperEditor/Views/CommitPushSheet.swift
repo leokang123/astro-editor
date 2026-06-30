@@ -95,7 +95,17 @@ struct CommitPushSheet: View {
             return "Checking..."
         }
         guard gitController.status.isRepository else { return "Unavailable" }
-        guard gitController.status.hasChanges else { return "Working tree clean" }
-        return gitController.status.summary.components(separatedBy: "\n").first ?? "Changed files found"
+        if gitController.status.hasChanges, gitController.status.hasUnpushedCommits {
+            return "\(localChangesText) + ready to push"
+        }
+        if gitController.status.hasChanges {
+            return localChangesText
+        }
+        return gitController.status.hasUnpushedCommits ? "Ready to push" : "Clean"
+    }
+
+    private var localChangesText: String {
+        guard let path = gitController.status.representativeChangePath else { return "Local changes" }
+        return "Local changes: \(path)"
     }
 }

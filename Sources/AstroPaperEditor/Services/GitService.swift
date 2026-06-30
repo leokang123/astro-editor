@@ -12,6 +12,7 @@ final class GitService {
                 branch: "",
                 remoteURL: "",
                 hasChanges: false,
+                hasUnpushedCommits: false,
                 summary: error.localizedDescription,
                 projectRootPath: projectRoot.path,
                 gitExecutablePath: gitPath
@@ -21,13 +22,15 @@ final class GitService {
         let branch = currentBranch(at: projectRoot)
         let remote = (try? runGit(["remote", "get-url", "origin"], at: projectRoot).trimmedOutput) ?? ""
         let changes = (try? runGit(["-c", "core.quotePath=false", "status", "--short"], at: projectRoot).trimmedOutput) ?? ""
-        let summary = changes.isEmpty ? "Working tree clean" : summarizeChanges(changes)
+        let hasUnpushedCommits = remote.isEmpty || branch.isEmpty ? false : hasUnpushedCommits(at: projectRoot, branch: branch)
+        let summary = changes.isEmpty ? (hasUnpushedCommits ? "Ready to push" : "Clean") : summarizeChanges(changes)
 
         return GitRepositoryStatus(
             isRepository: true,
             branch: branch,
             remoteURL: remote,
             hasChanges: !changes.isEmpty,
+            hasUnpushedCommits: hasUnpushedCommits,
             summary: summary,
             projectRootPath: projectRoot.path,
             gitExecutablePath: gitPath
@@ -108,22 +111,27 @@ final class GitService {
             throw GitServiceError.missingBranch
         }
 
+        var stagedCount: Int?
         let beforeAdd = try runGit(["-c", "core.quotePath=false", "status", "--short"], at: projectRoot).trimmedOutput
-        guard !beforeAdd.isEmpty else {
-            return "No changes to commit."
+        if !beforeAdd.isEmpty {
+            _ = try runGit(["add", "."], at: projectRoot)
+
+            let staged = try runGit(["diff", "--cached", "--name-only"], at: projectRoot).trimmedOutput
+            if !staged.isEmpty {
+                stagedCount = staged.split(separator: "\n", omittingEmptySubsequences: true).count
+                _ = try runGit(["commit", "-m", cleanMessage], at: projectRoot)
+            }
         }
 
-        _ = try runGit(["add", "."], at: projectRoot)
-
-        let staged = try runGit(["diff", "--cached", "--name-only"], at: projectRoot).trimmedOutput
-        guard !staged.isEmpty else {
-            return "No staged changes to commit."
+        guard hasUnpushedCommits(at: projectRoot, branch: branch) else {
+            return "No changes to commit or push."
         }
-        let stagedCount = staged.split(separator: "\n", omittingEmptySubsequences: true).count
 
-        _ = try runGit(["commit", "-m", cleanMessage], at: projectRoot)
         _ = try runGit(["push", "-u", "origin", branch], at: projectRoot)
-        return "Pushed to \(branch) (\(stagedCount) \(stagedCount == 1 ? "file" : "files"))."
+        if let stagedCount {
+            return "Committed and pushed to \(branch) (\(stagedCount) \(stagedCount == 1 ? "file" : "files"))."
+        }
+        return "Pushed pending commits to \(branch)."
     }
 
     private func isRepository(at projectRoot: URL) -> Bool {
@@ -149,6 +157,19 @@ final class GitService {
         }
 
         return ""
+    }
+
+    private func hasUnpushedCommits(at projectRoot: URL, branch: String) -> Bool {
+        guard (try? runGit(["rev-parse", "--verify", "HEAD"], at: projectRoot)) != nil else {
+            return false
+        }
+
+        guard (try? runGit(["rev-parse", "--verify", "origin/\(branch)"], at: projectRoot)) != nil else {
+            return true
+        }
+
+        let commit = (try? runGit(["rev-list", "--max-count=1", "origin/\(branch)..HEAD"], at: projectRoot).trimmedOutput) ?? ""
+        return !commit.isEmpty
     }
 
     @discardableResult

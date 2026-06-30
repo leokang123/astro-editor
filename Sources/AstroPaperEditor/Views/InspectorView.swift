@@ -172,17 +172,21 @@ private struct FrontmatterDraftEditor: View {
                 Toggle("Featured", isOn: featuredBinding)
                 Divider()
                 FieldRow("Published") {
-                    TextField("Published", text: frontmatterBinding(\.pubDatetime))
-                        .textFieldStyle(.plain)
-                        .multilineTextAlignment(.trailing)
-                        .focused($focusedField, equals: .published)
+                    timestampField(
+                        placeholder: "Published",
+                        text: frontmatterBinding(\.pubDatetime),
+                        value: draft.pubDatetime,
+                        field: .published
+                    )
                 }
                 Divider()
                 FieldRow("Modified") {
-                    TextField("Modified", text: frontmatterBinding(\.modDatetime))
-                        .textFieldStyle(.plain)
-                        .multilineTextAlignment(.trailing)
-                        .focused($focusedField, equals: .modified)
+                    timestampField(
+                        placeholder: "Modified",
+                        text: frontmatterBinding(\.modDatetime),
+                        value: draft.modDatetime,
+                        field: .modified
+                    )
                 }
             }
 
@@ -272,6 +276,31 @@ private struct FrontmatterDraftEditor: View {
                 handleDraftChange()
             }
         )
+    }
+
+    @ViewBuilder
+    private func timestampField(
+        placeholder: String,
+        text: Binding<String>,
+        value: String,
+        field: FrontmatterFocusField
+    ) -> some View {
+        if focusedField == field {
+            TextField(placeholder, text: text)
+                .textFieldStyle(.plain)
+                .multilineTextAlignment(.trailing)
+                .focused($focusedField, equals: field)
+        } else {
+            Button {
+                focusedField = field
+            } label: {
+                Text(DateFormatting.inspectorTimestampString(from: value))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     private var orderBinding: Binding<String> {

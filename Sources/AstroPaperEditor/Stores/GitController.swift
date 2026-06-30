@@ -29,6 +29,7 @@ final class GitController: ObservableObject {
             branch: "",
             remoteURL: "",
             hasChanges: false,
+            hasUnpushedCommits: false,
             summary: "Loading Git status...",
             projectRootPath: projectRoot.path,
             gitExecutablePath: ""
@@ -94,7 +95,7 @@ final class GitController: ObservableObject {
                     self?.log = output
                     self?.status = refreshedStatus
                     self?.isOperationRunning = false
-                    onStatusText(output == "No changes to commit." ? "No changes to commit" : "Pushed to GitHub")
+                    onStatusText(output == "No changes to commit or push." ? "No changes to commit or push" : "Pushed to GitHub")
                 }
             } catch {
                 await MainActor.run { [weak self] in

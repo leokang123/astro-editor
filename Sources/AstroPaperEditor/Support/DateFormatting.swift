@@ -16,4 +16,18 @@ enum DateFormatting {
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }()
+
+    static let inspectorTimestamp: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = .current
+        formatter.timeZone = TimeZone.current
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }()
+
+    static func inspectorTimestampString(from value: String) -> String {
+        guard let date = astropaperTimestamp.date(from: value) else { return value }
+        return inspectorTimestamp.string(from: date)
+    }
 }

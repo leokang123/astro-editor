@@ -196,6 +196,17 @@ struct GitPreferencesView: View {
     private var changesText: String {
         guard hasProject else { return "Unavailable" }
         guard gitController.status.isRepository else { return "Unavailable" }
-        return gitController.status.hasChanges ? "Changed files found" : "Working tree clean"
+        if gitController.status.hasChanges, gitController.status.hasUnpushedCommits {
+            return "\(localChangesText) + ready to push"
+        }
+        if gitController.status.hasChanges {
+            return localChangesText
+        }
+        return gitController.status.hasUnpushedCommits ? "Ready to push" : "Clean"
+    }
+
+    private var localChangesText: String {
+        guard let path = gitController.status.representativeChangePath else { return "Local changes" }
+        return "Local changes: \(path)"
     }
 }

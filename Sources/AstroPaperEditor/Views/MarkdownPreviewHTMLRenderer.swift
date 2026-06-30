@@ -216,7 +216,7 @@ struct MarkdownPreviewHTMLRenderer {
         return value.hasSuffix("/") ? value : value + "/"
     }
 
-    private func renderMarkdown(_ markdown: String) -> String {
+    private func renderMarkdown(_ markdown: String, sourceLineOffset: Int = 0) -> String {
         var html: [String] = []
         var paragraph: [String] = []
         var codeLines: [(line: Int, text: String)] = []
@@ -229,12 +229,12 @@ struct MarkdownPreviewHTMLRenderer {
         var blockMathStartLine = 1
 
         func marker(_ line: Int) -> String {
-            sourceLineMarker(line)
+            sourceLineMarker(sourceLineOffset + line)
         }
 
         func flushParagraph() {
             guard !paragraph.isEmpty else { return }
-            html.append("<p\(marker(paragraphStartLine))>\(paragraphHTML(paragraph, startLine: paragraphStartLine))</p>")
+            html.append("<p\(marker(paragraphStartLine))>\(paragraphHTML(paragraph, startLine: paragraphStartLine, sourceLineOffset: sourceLineOffset))</p>")
             paragraph.removeAll()
         }
 
@@ -326,14 +326,14 @@ struct MarkdownPreviewHTMLRenderer {
 
             if let rawHTML = rawHTMLLine(from: trimmed) {
                 flushParagraph()
-                html.append(wrapSourceLine(rawHTML, line: sourceLine))
+                html.append(wrapSourceLine(rawHTML, line: sourceLine, sourceLineOffset: sourceLineOffset))
                 index += 1
                 continue
             }
 
-            if let table = tableHTML(from: lines, startIndex: index) {
+            if let table = tableHTML(from: lines, startIndex: index, sourceLineOffset: sourceLineOffset) {
                 flushParagraph()
-                html.append(wrapSourceLine(table.html, line: sourceLine))
+                html.append(wrapSourceLine(table.html, line: sourceLine, sourceLineOffset: sourceLineOffset))
                 index = table.nextIndex
                 continue
             }
@@ -345,15 +345,14 @@ struct MarkdownPreviewHTMLRenderer {
                 continue
             }
 
-            if trimmed.hasPrefix(">") {
+            if let quote = blockquoteHTML(from: lines, startIndex: index, sourceLineOffset: sourceLineOffset) {
                 flushParagraph()
-                let quote = String(trimmed.dropFirst()).trimmingCharacters(in: .whitespaces)
-                html.append("<blockquote\(marker(sourceLine))>\(inlineHTML(quote))</blockquote>")
-                index += 1
+                html.append(quote.html)
+                index = quote.nextIndex
                 continue
             }
 
-            if let list = listHTML(from: lines, startIndex: index) {
+            if let list = listHTML(from: lines, startIndex: index, sourceLineOffset: sourceLineOffset) {
                 flushParagraph()
                 html.append(list.html)
                 index = list.nextIndex
@@ -375,8 +374,8 @@ struct MarkdownPreviewHTMLRenderer {
         return html.joined(separator: "\n")
     }
 
-    private func wrapSourceLine(_ html: String, line: Int) -> String {
-        "<div\(sourceLineMarker(line))>\(html)</div>"
+    private func wrapSourceLine(_ html: String, line: Int, sourceLineOffset: Int = 0) -> String {
+        "<div\(sourceLineMarker(sourceLineOffset + line))>\(html)</div>"
     }
 
     private func sourceLineMarker(_ line: Int) -> String {
@@ -392,10 +391,10 @@ struct MarkdownPreviewHTMLRenderer {
         return html.replacingOccurrences(of: "\n", with: "<br>")
     }
 
-    private func paragraphHTML(_ lines: [String], startLine: Int) -> String {
+    private func paragraphHTML(_ lines: [String], startLine: Int, sourceLineOffset: Int) -> String {
         lines.enumerated()
             .map { offset, line in
-                let sourceLine = startLine + offset
+                let sourceLine = sourceLineOffset + startLine + offset
                 return "<span class=\"source-line-anchor\" data-source-line=\"\(sourceLine)\">\(inlineHTML(line))</span>"
             }
             .joined(separator: "<br>")
@@ -414,16 +413,44 @@ struct MarkdownPreviewHTMLRenderer {
         return (hashes.count, text)
     }
 
-    private func listHTML(from lines: [String], startIndex: Int) -> (html: String, nextIndex: Int)? {
+    private func blockquoteHTML(from lines: [String], startIndex: Int, sourceLineOffset: Int) -> (html: String, nextIndex: Int)? {
+        guard let firstLine = blockquoteLineContent(from: lines[startIndex]) else { return nil }
+
+        var quoteLines = [firstLine]
+        var index = startIndex + 1
+
+        while index < lines.count {
+            guard let quoteLine = blockquoteLineContent(from: lines[index]) else { break }
+            quoteLines.append(quoteLine)
+            index += 1
+        }
+
+        let innerMarkdown = quoteLines.joined(separator: "\n")
+        let innerHTML = renderMarkdown(innerMarkdown, sourceLineOffset: sourceLineOffset + startIndex)
+        let sourceLine = sourceLineOffset + startIndex + 1
+        return ("<blockquote\(sourceLineMarker(sourceLine))>\(innerHTML)</blockquote>", index)
+    }
+
+    private func blockquoteLineContent(from line: String) -> String? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix(">") else { return nil }
+
+        let contentStart = trimmed.index(after: trimmed.startIndex)
+        let content = trimmed[contentStart...]
+        return String(content).trimmingCharacters(in: .whitespaces)
+    }
+
+    private func listHTML(from lines: [String], startIndex: Int, sourceLineOffset: Int) -> (html: String, nextIndex: Int)? {
         guard let marker = listMarker(from: lines[startIndex]) else { return nil }
-        return renderList(lines: lines, startIndex: startIndex, indent: marker.indent, kind: marker.kind)
+        return renderList(lines: lines, startIndex: startIndex, indent: marker.indent, kind: marker.kind, sourceLineOffset: sourceLineOffset)
     }
 
     private func renderList(
         lines: [String],
         startIndex: Int,
         indent: Int,
-        kind: MarkdownListKind
+        kind: MarkdownListKind,
+        sourceLineOffset: Int
     ) -> (html: String, nextIndex: Int) {
         var items: [String] = []
         var index = startIndex
@@ -450,7 +477,8 @@ struct MarkdownPreviewHTMLRenderer {
                             lines: lines,
                             startIndex: index,
                             indent: nestedMarker.indent,
-                            kind: nestedMarker.kind
+                            kind: nestedMarker.kind,
+                            sourceLineOffset: sourceLineOffset
                         )
                         itemHTML += nested.html
                         index = nested.nextIndex
@@ -464,11 +492,11 @@ struct MarkdownPreviewHTMLRenderer {
                 index += 1
             }
 
-            items.append("<li\(sourceLineMarker(itemLine))>\(itemHTML)</li>")
+            items.append("<li\(sourceLineMarker(sourceLineOffset + itemLine))>\(itemHTML)</li>")
         }
 
         let start = kind.startAttribute
-        return ("<\(kind.tag)\(start)\(sourceLineMarker(startIndex + 1))>\(items.joined())</\(kind.tag)>", index)
+        return ("<\(kind.tag)\(start)\(sourceLineMarker(sourceLineOffset + startIndex + 1))>\(items.joined())</\(kind.tag)>", index)
     }
 
     private func listMarker(from line: String) -> MarkdownListMarker? {
@@ -605,18 +633,18 @@ struct MarkdownPreviewHTMLRenderer {
             || Self.eventHandlerAttributeRegex.firstMatch(in: line, range: range) != nil
     }
 
-    private func tableHTML(from lines: [String], startIndex: Int) -> (html: String, nextIndex: Int)? {
+    private func tableHTML(from lines: [String], startIndex: Int, sourceLineOffset: Int) -> (html: String, nextIndex: Int)? {
         guard startIndex + 1 < lines.count else { return nil }
         let header = lines[startIndex].trimmingCharacters(in: .whitespaces)
         let separator = lines[startIndex + 1].trimmingCharacters(in: .whitespaces)
         guard isTableRow(header), isTableSeparator(separator) else { return nil }
 
-        var rows: [(line: Int, cells: [String])] = [(startIndex + 1, tableCells(from: header))]
+        var rows: [(line: Int, cells: [String])] = [(sourceLineOffset + startIndex + 1, tableCells(from: header))]
         var index = startIndex + 2
         while index < lines.count {
             let line = lines[index].trimmingCharacters(in: .whitespaces)
             guard isTableRow(line), !isTableSeparator(line) else { break }
-            rows.append((index + 1, tableCells(from: line)))
+            rows.append((sourceLineOffset + index + 1, tableCells(from: line)))
             index += 1
         }
 
