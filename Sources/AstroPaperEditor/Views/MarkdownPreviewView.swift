@@ -8,10 +8,11 @@ struct MarkdownPreviewView: NSViewRepresentable {
     let sourcePosition: Double
     let isActive: Bool
     var onSourcePositionChange: (Double) -> Void
+    var onOpenPostLink: (URL) -> Void
     var onPreviewReady: () -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onSourcePositionChange: onSourcePositionChange, onPreviewReady: onPreviewReady)
+        Coordinator(onSourcePositionChange: onSourcePositionChange, onOpenPostLink: onOpenPostLink, onPreviewReady: onPreviewReady)
     }
 
     func makeNSView(context: Context) -> WKWebView {
@@ -19,6 +20,12 @@ struct MarkdownPreviewView: NSViewRepresentable {
         configuration.setURLSchemeHandler(context.coordinator.resourceSchemeHandler, forURLScheme: "astro-paper-resource")
         configuration.userContentController.add(context.coordinator, name: "sourcePosition")
         configuration.userContentController.add(context.coordinator, name: "previewReady")
+        configuration.userContentController.add(context.coordinator, name: "openPostLink")
+        configuration.userContentController.addUserScript(WKUserScript(
+            source: Self.postLinkNavigationScript,
+            injectionTime: .atDocumentEnd,
+            forMainFrameOnly: true
+        ))
         configuration.userContentController.addUserScript(WKUserScript(
             source: Self.sourcePositionScript,
             injectionTime: .atDocumentEnd,
@@ -36,6 +43,7 @@ struct MarkdownPreviewView: NSViewRepresentable {
         context.coordinator.sourcePosition = sourcePosition
         context.coordinator.isActive = isActive
         context.coordinator.onSourcePositionChange = onSourcePositionChange
+        context.coordinator.onOpenPostLink = onOpenPostLink
         context.coordinator.onPreviewReady = onPreviewReady
         context.coordinator.resourceSchemeHandler.projectRoot = projectRoot.standardizedFileURL
         let metadataKey = [
@@ -74,7 +82,23 @@ struct MarkdownPreviewView: NSViewRepresentable {
     static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
         webView.configuration.userContentController.removeScriptMessageHandler(forName: "sourcePosition")
         webView.configuration.userContentController.removeScriptMessageHandler(forName: "previewReady")
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: "openPostLink")
     }
+
+    static let postLinkNavigationScript = """
+    document.addEventListener("click", event => {
+      const anchor = event.target.closest?.("a[href]");
+      if (!anchor) return;
+      const url = new URL(anchor.href, document.baseURI);
+      if (url.protocol !== "file:" || !url.pathname.startsWith("/posts/")) return;
+      event.preventDefault();
+      const position = window.astroPaperScrollSync?.sourcePositionForPageOffset(window.scrollY);
+      if (position != null) {
+        window.webkit.messageHandlers.sourcePosition.postMessage(position);
+      }
+      window.webkit.messageHandlers.openPostLink.postMessage(url.href);
+    });
+    """
 
     private static let sourcePositionScript = """
     (() => {
@@ -227,11 +251,13 @@ struct MarkdownPreviewView: NSViewRepresentable {
         var isActive = false
         var reportedSourcePosition: Double?
         var onSourcePositionChange: (Double) -> Void
+        var onOpenPostLink: (URL) -> Void
         var onPreviewReady: () -> Void
         let resourceSchemeHandler = PreviewResourceSchemeHandler()
 
-        init(onSourcePositionChange: @escaping (Double) -> Void, onPreviewReady: @escaping () -> Void) {
+        init(onSourcePositionChange: @escaping (Double) -> Void, onOpenPostLink: @escaping (URL) -> Void, onPreviewReady: @escaping () -> Void) {
             self.onSourcePositionChange = onSourcePositionChange
+            self.onOpenPostLink = onOpenPostLink
             self.onPreviewReady = onPreviewReady
         }
 
@@ -251,7 +277,14 @@ struct MarkdownPreviewView: NSViewRepresentable {
         }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-            if message.name == "previewReady" {
+            if message.name == "openPostLink",
+               let href = message.body as? String,
+               let url = URL(string: href),
+               url.isFileURL, url.path.hasPrefix("/posts/") {
+                DispatchQueue.main.async {
+                    self.onOpenPostLink(url)
+                }
+            } else if message.name == "previewReady" {
                 if isActive {
                     onPreviewReady()
                 }

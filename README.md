@@ -14,8 +14,8 @@ Download the latest build from GitHub Releases:
 
 The release includes:
 
-- `AstroPaperEditor-v0.5.6.dmg`
-- `AstroPaperEditor-v0.5.6.zip`
+- `AstroPaperEditor-v0.5.7.dmg`
+- `AstroPaperEditor-v0.5.7.zip`
 
 Open the DMG and move `AstroPaperEditor.app` to your Applications folder.
 
@@ -88,6 +88,14 @@ Useful shortcuts:
 - `Command + S`: save the current document
 - `Command + E`: switch between Edit and Preview
 - `Command + F`: open Find, including from Preview mode
+
+## Link Between Posts
+
+In Edit mode, click **Insert Post Link**, search by title or filename, and select a post to insert its Markdown link at the cursor. Korean and other letter-based paths stay readable in the editor.
+
+In Preview mode, click a `/posts/...` link to open that post inside the app. Use the toolbar's **Back** button to return to the previous document, reading position, and Edit/Preview mode. Sidebar document changes are also included in the history. History lasts for the current app session and is cleared when switching projects.
+
+Unsaved changes use the existing Save/Discard/Cancel prompt before navigation. Links are not automatically updated when a target file is renamed or moved.
 
 ## Preview Posts
 

@@ -11,6 +11,18 @@ final class BlogStore: ObservableObject {
     @Published var tree: [BlogNode] = []
     @Published var selectionID: String?
     @Published var currentDocument: BlogDocument?
+    @Published private var documentHistory: [DocumentVisit] = []
+
+    private struct DocumentVisit {
+        let url: URL
+        let relativePath: String
+        let sourcePosition: Double
+        let mode: EditorMode
+    }
+
+    var canGoBack: Bool {
+        hasProject && !documentHistory.isEmpty
+    }
     @Published var isDirty = false
     @Published var statusText = "Ready"
     @Published var buildLog = ""
@@ -349,20 +361,56 @@ final class BlogStore: ObservableObject {
     func selectNode(id: String?) {
         guard hasProject else { return }
         guard selectionID != id else { return }
+        let previousVisit = currentDocumentVisit()
         guard confirmDiscardOrSaveChanges() else { return }
-        hideEditorFindInterface()
-        selectionID = id
-
-        guard let id, let node = node(withID: id), node.kind == .document else {
-            closeCurrentDocument()
-            return
-        }
 
         do {
-            try openDocument(node)
+            if let id, let node = node(withID: id), node.kind == .document {
+                try openDocument(node)
+            } else {
+                closeCurrentDocument()
+            }
+            hideEditorFindInterface()
+            selectionID = id
+            if let previousVisit {
+                documentHistory.append(previousVisit)
+            }
         } catch {
             message = AppMessage(text: error.localizedDescription)
         }
+    }
+
+    func goBack() {
+        guard canGoBack, confirmDiscardOrSaveChanges() else { return }
+        while let visit = documentHistory.last {
+            guard FileManager.default.fileExists(atPath: visit.url.path) else {
+                documentHistory.removeLast()
+                continue
+            }
+            do {
+                try openDocument(at: visit.url, relativePath: visit.relativePath, sourcePosition: visit.sourcePosition)
+                editorMode = visit.mode
+                selectionID = BlogNodeID.make(kind: .document, relativePath: visit.relativePath)
+                hideEditorFindInterface()
+                documentHistory.removeLast()
+            } catch {
+                message = AppMessage(text: error.localizedDescription)
+            }
+            return
+        }
+    }
+
+    private func currentDocumentVisit() -> DocumentVisit? {
+        guard let document = currentDocument else { return nil }
+        if editorMode == .edit {
+            captureEditorSourcePosition()
+        }
+        return DocumentVisit(
+            url: document.fileURL,
+            relativePath: document.relativePath,
+            sourcePosition: editorSourcePosition,
+            mode: editorMode
+        )
     }
 
     func markBodyChanged() {
@@ -1011,6 +1059,7 @@ final class BlogStore: ObservableObject {
     }
 
     private func resetProjectRuntimeState() {
+        documentHistory.removeAll()
         buildLog = ""
         assetCleanupMessage = ""
         gitController.resetProjectState()
@@ -1082,6 +1131,34 @@ final class BlogStore: ObservableObject {
     func writeSocialSettings(_ settings: HomeSettings) throws {
         try siteSettingsService.writeSocialSettings(settings, projectRoot: projectRoot)
         statusText = "Saved social links"
+    }
+
+    func postLinkDocuments(includeCurrentDocument: Bool = false) throws -> [PostLinkDocument] {
+        try documentNodes(from: tree).compactMap { node in
+            guard (includeCurrentDocument || node.url != currentDocument?.fileURL),
+                  !node.url.lastPathComponent.hasPrefix("_"),
+                  node.url.pathExtension == "md" else { return nil }
+            let frontmatter = try fileService.readFrontmatter(at: node.url)
+            return PostLinkDocument(
+                id: node.id,
+                title: frontmatter.title,
+                relativePath: node.relativePath,
+                slug: frontmatter.postLinkSlug
+            )
+        }
+    }
+
+    func openPostLink(_ url: URL) {
+        do {
+            let documents = try postLinkDocuments(includeCurrentDocument: true)
+            guard let id = try PostLinkService().documentID(for: url, in: documents) else {
+                message = AppMessage(text: "Could not find a post for \(url.path).")
+                return
+            }
+            selectNode(id: id)
+        } catch {
+            message = AppMessage(text: error.localizedDescription)
+        }
     }
 
     func featuredDocuments() throws -> [FeaturedDocument] {
@@ -1177,10 +1254,11 @@ final class BlogStore: ObservableObject {
         try openDocument(at: node.url, relativePath: node.relativePath)
     }
 
-    private func openDocument(at url: URL, relativePath: String) throws {
+    private func openDocument(at url: URL, relativePath: String, sourcePosition: Double = 1) throws {
         let document = try fileService.readDocument(at: url, blogRoot: blogRoot)
-        currentDocument = document
         documentSession.open(document)
+        documentSession.updateSourcePosition(sourcePosition)
+        currentDocument = document
         isDirty = false
         statusText = "Opened \(relativePath)"
     }

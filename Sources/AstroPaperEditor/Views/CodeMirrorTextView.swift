@@ -17,6 +17,7 @@ struct CodeMirrorTextView: NSViewRepresentable {
     var onRegisterBodyProvider: (((() -> String?)?) -> Void)
     var onRegisterSourcePositionProvider: (((() -> Double?)?) -> Void)
     var onInsertImages: ([PastedImage]) -> String
+    var onRegisterPostLinkInserter: (((PostLinkDocument) -> Void)?) -> Void
     var onTogglePreview: (() -> Void)?
     var onFindRequested: (() -> Void)?
     var onFindStatusChange: ((Int, Int, Int?) -> Void)?
@@ -52,6 +53,7 @@ struct CodeMirrorTextView: NSViewRepresentable {
         webView.setValue(false, forKey: "drawsBackground")
         webView.navigationDelegate = context.coordinator
         webView.editorCoordinator = context.coordinator
+        context.coordinator.onRegisterPostLinkInserter = onRegisterPostLinkInserter
         context.coordinator.webView = webView
         context.coordinator.registerProviders()
         context.coordinator.loadEditor(in: webView)
@@ -82,6 +84,7 @@ struct CodeMirrorTextView: NSViewRepresentable {
     }
 
     static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
+        coordinator.onRegisterPostLinkInserter?(nil)
         coordinator.onRegisterBodyProvider(nil)
         coordinator.onRegisterSourcePositionProvider(nil)
         webView.configuration.userContentController.removeScriptMessageHandler(forName: "editorReady")
@@ -107,6 +110,7 @@ struct CodeMirrorTextView: NSViewRepresentable {
         var onFindRequested: (() -> Void)?
         var onFindStatusChange: ((Int, Int, Int?) -> Void)?
         var onEditorReady: () -> Void
+        var onRegisterPostLinkInserter: ((((PostLinkDocument) -> Void)?) -> Void)?
         weak var webView: WKWebView?
 
         private var isLoaded = false
@@ -235,6 +239,9 @@ struct CodeMirrorTextView: NSViewRepresentable {
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             switch message.name {
             case "editorReady":
+                onRegisterPostLinkInserter? { [weak self] document in
+                    self?.insertPostLink(document)
+                }
                 onEditorReady()
             case "textChanged":
                 let text: String?
@@ -269,6 +276,10 @@ struct CodeMirrorTextView: NSViewRepresentable {
             default:
                 break
             }
+        }
+
+        func insertPostLink(_ document: PostLinkDocument) {
+            evaluate("window.astroPaperEditor?.insertPostLink(\(Self.jsonObject(document)));")
         }
 
         func insertImages(from pasteboard: NSPasteboard) {

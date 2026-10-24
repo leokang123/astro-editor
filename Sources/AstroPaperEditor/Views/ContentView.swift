@@ -23,6 +23,14 @@ struct ContentView: View {
         .toolbar {
             ToolbarItemGroup {
                 Button {
+                    store.goBack()
+                } label: {
+                    Label("Back", systemImage: "chevron.left")
+                }
+                .disabled(!store.canGoBack)
+                .help("Return to the previous document and reading position")
+
+                Button {
                     showSidebar.toggle()
                 } label: {
                     Label(showSidebar ? "Hide Sidebar" : "Show Sidebar", systemImage: "sidebar.left")
@@ -172,6 +180,8 @@ struct ContentView: View {
                     onRegisterBodyProvider: store.setEditorBodyProvider,
                     onRegisterSourcePositionProvider: store.setEditorSourcePositionProvider,
                     onInsertImages: store.insertImages,
+                    onLoadPostLinks: { try store.postLinkDocuments() },
+                    onOpenPostLink: store.openPostLink,
                     onSourcePositionChange: store.updateEditorSourcePosition,
                     onFindRequested: store.showEditorFindInterface,
                     onFindNext: store.findNextInEditor,

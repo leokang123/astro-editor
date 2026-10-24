@@ -1,3 +1,4 @@
+import {postLinkMarkdown} from "./post-link.mjs";
 import {history, historyKeymap, indentWithTab, standardKeymap} from "@codemirror/commands";
 import {closeBrackets, closeBracketsKeymap} from "@codemirror/autocomplete";
 import {markdown} from "@codemirror/lang-markdown";
@@ -417,6 +418,9 @@ window.astroPaperEditor = {
     } else {
       view.contentDOM.blur();
     }
+  },
+  insertPostLink(document) {
+    this.insertText(postLinkMarkdown(document));
   },
   insertText(text) {
     const transaction = view.state.replaceSelection(text || "");

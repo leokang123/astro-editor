@@ -91,6 +91,9 @@ private final class EditorPaneContainerView: NSView {
 }
 
 struct EditorView: View {
+    @State private var showPostLinkPicker = false
+    @State private var pendingPostLink: PostLinkDocument?
+    @State private var insertPostLink: ((PostLinkDocument) -> Void)?
     @State private var previewReadyDocumentID: String?
     @FocusState private var findFieldIsFocused: Bool
     @FocusState private var replaceFieldIsFocused: Bool
@@ -120,6 +123,8 @@ struct EditorView: View {
     var onRegisterBodyProvider: (((() -> String?)?) -> Void)
     var onRegisterSourcePositionProvider: (((() -> Double?)?) -> Void)
     var onInsertImages: ([PastedImage]) -> String
+    var onLoadPostLinks: () throws -> [PostLinkDocument]
+    var onOpenPostLink: (URL) -> Void
     var onSourcePositionChange: (Double) -> Void
     var onFindRequested: () -> Bool
     var onFindNext: () -> Bool
@@ -157,6 +162,13 @@ struct EditorView: View {
                             }
                             .help("Discard this unavailable document and return to the project picker")
                         }
+                        Button {
+                            showPostLinkPicker = true
+                        } label: {
+                            Label("Insert Post Link", systemImage: "link")
+                        }
+                        .disabled(!hasProject || editorMode != .edit || insertPostLink == nil)
+                        .help("Search for a post and insert its link at the cursor")
                         Button {
                             onTogglePreview()
                         } label: {
@@ -200,6 +212,9 @@ struct EditorView: View {
                                 onInsertImages: { images in
                                     onInsertImages(images)
                                 },
+                                onRegisterPostLinkInserter: { inserter in
+                                    insertPostLink = inserter
+                                },
                                 onTogglePreview: {
                                     onTogglePreview()
                                 },
@@ -224,6 +239,7 @@ struct EditorView: View {
                                     onSourcePositionChange: { position in
                                         onSourcePositionChange(position)
                                     },
+                                    onOpenPostLink: onOpenPostLink,
                                     onPreviewReady: {
                                         guard editorMode == .preview else { return }
                                         previewReadyDocumentID = documentID
@@ -280,6 +296,17 @@ struct EditorView: View {
                 }
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .sheet(isPresented: $showPostLinkPicker, onDismiss: {
+            if let pendingPostLink {
+                insertPostLink?(pendingPostLink)
+                self.pendingPostLink = nil
+            }
+        }) {
+            PostLinkSheet(loadDocuments: onLoadPostLinks) { document in
+                pendingPostLink = document
+                showPostLinkPicker = false
             }
         }
     }

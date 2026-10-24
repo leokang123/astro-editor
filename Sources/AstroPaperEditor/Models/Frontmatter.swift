@@ -193,6 +193,15 @@ struct Frontmatter: Equatable {
         return lines.joined(separator: "\n")
     }
 
+    var postLinkSlug: String? {
+        guard let line = extraLines.first(where: { $0.hasPrefix("slug:") }) else { return nil }
+        let value = Self.scalarValue(from: line)
+        if value.hasPrefix("'"), value.hasSuffix("'"), value.count >= 2 {
+            return String(value.dropFirst().dropLast()).replacingOccurrences(of: "''", with: "'")
+        }
+        return value
+    }
+
     private static func scalarValue(from line: String) -> String {
         guard let colon = line.firstIndex(of: ":") else { return "" }
         let raw = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
