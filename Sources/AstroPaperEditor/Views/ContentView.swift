@@ -78,6 +78,13 @@ struct ContentView: View {
                 .disabled(!store.canSave)
 
                 Button {
+                    store.pullGit()
+                } label: {
+                    Label(store.isPulling ? "Pulling" : "Pull", systemImage: "arrow.down.circle")
+                }
+                .disabled(!store.canCommitAndPush)
+
+                Button {
                     store.activeSheet = .commitPush
                 } label: {
                     Label(gitController.isOperationRunning ? "Pushing" : "Commit & Push", systemImage: "paperplane")
@@ -92,6 +99,7 @@ struct ContentView: View {
                 .disabled(!store.hasProject)
             }
         }
+        .disabled(store.isPulling)
         .sheet(item: $store.activeSheet) { sheet in
             switch sheet {
             case .newCategory:

@@ -931,6 +931,33 @@ final class BlogStore: ObservableObject {
         )
     }
 
+    @Published var isPulling = false
+
+    func pullGit() {
+        guard hasProject, gitController.canRunOperation else { return }
+        guard confirmDiscardOrSaveChanges() else { return }
+        let root = projectRoot
+        let selectedPath = currentDocument?.relativePath
+        let mode = editorMode
+        isPulling = true
+        statusText = "Pulling from GitHub..."
+        gitController.pull(
+            at: root,
+            onSuccess: { [weak self] in
+                guard let self else { return }
+                self.isPulling = false
+                guard self.projectRoot == root else { return }
+                self.closeCurrentDocument()
+                self.rescan(selectingRelativePath: selectedPath, editorMode: mode)
+            },
+            onError: { [weak self] text in
+                self?.isPulling = false
+                self?.statusText = "Pull failed"
+                self?.message = AppMessage(text: text)
+            }
+        )
+    }
+
     func commitAndPush(message commitMessage: String) {
         guard hasProject else { return }
         guard gitController.canRunOperation else { return }

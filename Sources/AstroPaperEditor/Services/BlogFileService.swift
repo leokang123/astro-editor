@@ -43,6 +43,7 @@ struct BlogFileService {
 
     func writeDocument(_ document: BlogDocument) throws {
         let text = document.frontmatter.rendered() + "\n" + document.body
+        try FrontmatterValidation.validate(text, path: document.relativePath)
         try text.write(to: document.fileURL, atomically: true, encoding: .utf8)
     }
 

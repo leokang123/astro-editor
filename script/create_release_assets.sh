@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VERSION="${1:-0.5.7}"
+VERSION="${1:-0.5.8}"
 APP_NAME="AstroPaperEditor"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

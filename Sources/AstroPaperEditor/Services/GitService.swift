@@ -92,7 +92,38 @@ final class GitService {
         return output.isEmpty ? "Pulled from \(branch)." : output
     }
 
+    func pull(at projectRoot: URL) throws -> String {
+        guard isRepository(at: projectRoot) else { throw GitServiceError.notRepository }
+        guard hasOrigin(at: projectRoot) else { throw GitServiceError.missingRemote }
+        let branch = currentBranch(at: projectRoot)
+        guard !branch.isEmpty else { throw GitServiceError.missingBranch }
+        for state in ["MERGE_HEAD", "rebase-merge", "rebase-apply", "CHERRY_PICK_HEAD", "REVERT_HEAD"] {
+            let path = try runGit(["rev-parse", "--git-path", state], at: projectRoot).trimmedOutput
+            let url = URL(fileURLWithPath: path, relativeTo: projectRoot)
+            guard !FileManager.default.fileExists(atPath: url.path) else {
+                throw GitServiceError.commandFailed("Finish the existing Git operation before pulling.")
+            }
+        }
+        guard try runGit(["status", "--porcelain"], at: projectRoot).trimmedOutput.isEmpty else {
+            throw GitServiceError.commandFailed("Commit local file changes before pulling. If Commit & Push is rejected, your commit is kept; use Pull, then Commit & Push again.")
+        }
+        var output = try runGit(["fetch", "origin", branch], at: projectRoot).output
+        do {
+            output += try runGit(["merge", "--no-edit", "FETCH_HEAD"], at: projectRoot).output
+        } catch {
+            let failure = error.localizedDescription
+            let mergePath = try runGit(["rev-parse", "--git-path", "MERGE_HEAD"], at: projectRoot).trimmedOutput
+            if FileManager.default.fileExists(atPath: URL(fileURLWithPath: mergePath, relativeTo: projectRoot).path) {
+                try runGit(["merge", "--abort"], at: projectRoot)
+                throw GitServiceError.commandFailed("Pull conflicted and was cancelled. Your local commits are preserved. Resolve the conflicting changes with a Git client.\n\n\(failure)")
+            }
+            throw error
+        }
+        return output
+    }
+
     func commitAndPush(at projectRoot: URL, message: String) async throws -> String {
+        try FrontmatterValidation.validateProject(at: projectRoot)
         let cleanMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanMessage.isEmpty else {
             throw GitServiceError.emptyCommitMessage

@@ -1,4 +1,5 @@
 import Foundation
+import Yams
 
 struct Frontmatter: Equatable {
     var title: String
@@ -88,7 +89,7 @@ struct Frontmatter: Equatable {
         var extraLines: [String] = []
         var readingTags = false
 
-        for line in yaml.components(separatedBy: "\n") {
+        for line in normalizedFieldLines(yaml) {
             if readingTags {
                 if let tag = Self.tagValue(from: line) {
                     tags.append(tag)
@@ -182,7 +183,7 @@ struct Frontmatter: Equatable {
         if tags.isEmpty {
             lines.append("  - general")
         } else {
-            lines.append(contentsOf: tags.map { "  - \(Self.escape($0))" })
+            lines.append(contentsOf: tags.map { "  - \"\(Self.escape($0))\"" })
         }
 
         if !extraLines.isEmpty {
@@ -204,11 +205,42 @@ struct Frontmatter: Equatable {
 
     private static func scalarValue(from line: String) -> String {
         guard let colon = line.firstIndex(of: ":") else { return "" }
-        let raw = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
-        if raw.hasPrefix("\""), raw.hasSuffix("\""), raw.count >= 2 {
-            return String(raw.dropFirst().dropLast()).replacingOccurrences(of: "\\\"", with: "\"")
+        return unquoted(String(line[line.index(after: colon)...]).trimmingCharacters(in: .whitespaces))
+    }
+
+    // Collapse valid multiline fields before the line-oriented editor reads them.
+    private static func normalizedFieldLines(_ yaml: String) -> [String] {
+        let lines = yaml.components(separatedBy: "\n")
+        guard (try? Yams.compose(yaml: yaml)) != nil else { return lines }
+        let fields = ["title", "description", "ogImage", "pubDatetime", "modDatetime"]
+        var result: [String] = []
+        var index = 0
+        while index < lines.count {
+            let line = lines[index]
+            guard let field = fields.first(where: { line.hasPrefix($0 + ":") }) else {
+                result.append(line)
+                index += 1
+                continue
+            }
+            var end = index + 1
+            while end <= lines.count {
+                let block = lines[index..<end].joined(separator: "\n")
+                if let node = try? Yams.compose(yaml: block),
+                   let value = node[field]?.string,
+                   (end == lines.count || (!lines[end].hasPrefix(" ") && !lines[end].hasPrefix("\t"))) {
+                    result.append("\(field): \"\(escape(value))\"")
+                    break
+                }
+                end += 1
+            }
+            if end > lines.count {
+                result.append(line)
+                index += 1
+            } else {
+                index = end
+            }
         }
-        return raw
+        return result
     }
 
     private static func boolValue(from line: String) -> Bool? {
@@ -249,16 +281,14 @@ struct Frontmatter: Equatable {
     }
 
     private static func unquoted(_ value: String) -> String {
-        if value.hasPrefix("\""), value.hasSuffix("\""), value.count >= 2 {
-            return String(value.dropFirst().dropLast()).replacingOccurrences(of: "\\\"", with: "\"")
-        }
-        if value.hasPrefix("'"), value.hasSuffix("'"), value.count >= 2 {
-            return String(value.dropFirst().dropLast())
+        if let node = try? Yams.compose(yaml: value), let scalar = node.string {
+            return scalar
         }
         return value
     }
 
     private static func escape(_ value: String) -> String {
-        value.replacingOccurrences(of: "\"", with: "\\\"")
+        let data = try! JSONEncoder().encode(value)
+        return String(data: data, encoding: .utf8)!.dropFirst().dropLast().description
     }
 }

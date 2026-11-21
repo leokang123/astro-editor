@@ -4,8 +4,8 @@ set -euo pipefail
 MODE="${1:-run}"
 APP_NAME="AstroPaperEditor"
 BUNDLE_ID="dev.jeonghoon.AstroPaperEditor"
-APP_VERSION="0.5.7"
-BUILD_NUMBER="57"
+APP_VERSION="0.5.8"
+BUILD_NUMBER="58"
 MIN_SYSTEM_VERSION="13.0"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -35,6 +35,7 @@ rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES"
 cp "$BUILD_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
+cp "$ROOT_DIR/Resources/ThirdPartyNotices.txt" "$APP_RESOURCES/"
 if [[ -f "$ICON_FILE" ]]; then
   cp "$ICON_FILE" "$APP_RESOURCES/AppIcon.icns"
 fi

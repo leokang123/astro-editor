@@ -10,10 +10,15 @@ let package = Package(
     products: [
         .executable(name: "AstroPaperEditor", targets: ["AstroPaperEditor"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/jpsim/Yams.git", from: "6.2.2")
+    ],
     targets: [
         .executableTarget(
             name: "AstroPaperEditor",
+            dependencies: ["Yams"],
             path: "Sources/AstroPaperEditor"
-        )
+        ),
+        .testTarget(name: "AstroPaperEditorTests", dependencies: ["AstroPaperEditor", "Yams"])
     ]
 )

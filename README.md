@@ -14,8 +14,8 @@ Download the latest build from GitHub Releases:
 
 The release includes:
 
-- `AstroPaperEditor-v0.5.7.dmg`
-- `AstroPaperEditor-v0.5.7.zip`
+- `AstroPaperEditor-v0.5.8.dmg`
+- `AstroPaperEditor-v0.5.8.zip`
 
 Open the DMG and move `AstroPaperEditor.app` to your Applications folder.
 
@@ -168,6 +168,14 @@ Configure the Git repository used by Commit & Push.
 ![Git preferences](docs/images/preferences-git.png)
 
 The app can initialize a repository, set a remote, and push the selected project when you are ready to deploy.
+
+Use **Pull** in the toolbar to fetch and merge remote changes. If Commit & Push is rejected because the remote has new commits, use Pull, then Commit & Push again. Pull requires a clean working tree and preserves local commits. If a merge conflicts, the app cancels the merge and reports the conflict for resolution in a Git client.
+
+### Frontmatter Validation
+
+The app checks YAML syntax before saving a post and checks all Markdown and MDX posts before Commit & Push. Errors identify the affected file and parser location. Open the post and edit **Additional YAML fields** in Post Details to correct preserved invalid lines, then save again. Invalid saves leave the original file untouched.
+
+Titles, descriptions, image paths, and tags are escaped safely when saved, including quotes, backslashes, and line breaks. These checks validate YAML syntax; they do not replace Astro's content schema checks.
 
 ### Developer
 

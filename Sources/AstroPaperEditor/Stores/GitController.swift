@@ -75,6 +75,35 @@ final class GitController: ObservableObject {
         }
     }
 
+    func pull(
+        at projectRoot: URL,
+        onSuccess: @escaping @MainActor () -> Void,
+        onError: @escaping @MainActor (String) -> Void
+    ) {
+        guard !isOperationRunning else { return }
+        let service = gitService
+        isOperationRunning = true
+        log = "Pulling..."
+        Task.detached { [service, projectRoot] in
+            do {
+                let output = try service.pull(at: projectRoot)
+                let refreshedStatus = await service.status(at: projectRoot)
+                await MainActor.run { [weak self] in
+                    self?.log = output
+                    self?.status = refreshedStatus
+                    self?.isOperationRunning = false
+                    onSuccess()
+                }
+            } catch {
+                await MainActor.run { [weak self] in
+                    self?.log = error.localizedDescription
+                    self?.isOperationRunning = false
+                    onError(error.localizedDescription)
+                }
+            }
+        }
+    }
+
     func commitAndPush(
         at projectRoot: URL,
         message: String,

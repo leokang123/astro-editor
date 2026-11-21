@@ -11,6 +11,15 @@ struct InspectorView: View {
     var onClearOGImage: () -> Void
     var onResolveAssetImageURL: (String?) -> URL?
 
+    private func validationError(_ document: BlogDocument) -> String? {
+        do {
+            try FrontmatterValidation.validate(document.frontmatter.rendered(), path: document.relativePath)
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
@@ -24,6 +33,12 @@ struct InspectorView: View {
             if let document {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
+                        if let error = validationError(document) {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                                .textSelection(.enabled)
+                        }
                         FrontmatterDraftEditor(
                             documentID: document.id,
                             frontmatter: document.frontmatter,
@@ -53,12 +68,18 @@ struct InspectorView: View {
 
                         if !document.frontmatter.extraLines.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("Preserved Extra Fields")
+                                Text("Additional YAML fields")
                                     .font(.headline)
-                                Text(document.frontmatter.extraLines.joined(separator: "\n"))
+                                Text("Fix invalid lines here. Each field needs a key and value, such as draft: true.")
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .textSelection(.enabled)
+                                TextEditor(text: Binding(
+                                    get: { document.frontmatter.extraLines.joined(separator: "\n") },
+                                    set: { value in
+                                        onUpdateFrontmatter { $0.extraLines = value.components(separatedBy: "\n") }
+                                    }
+                                ))
+                                    .font(.system(.caption, design: .monospaced))
+                                    .frame(minHeight: 120)
                                     .padding(10)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .background(.quaternary.opacity(0.35))
